@@ -1,0 +1,72 @@
+{
+    "name": "karimalihussein/laravel-query-sentinel",
+    "description": "A driver-agnostic, CI-ready, extensible Laravel package for analyzing database query performance",
+    "keywords": [
+        "laravel",
+        "query",
+        "performance",
+        "diagnostics",
+        "explain",
+        "sentinel",
+        "database",
+        "mysql",
+        "postgres"
+    ],
+    "homepage": "https://github.com/karimalihussein/laravel-query-sentinel",
+    "support": {
+        "source": "https://github.com/karimalihussein/laravel-query-sentinel",
+        "issues": "https://github.com/karimalihussein/laravel-query-sentinel/issues"
+    },
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Karim Ali Hussein",
+            "role": "Sr. Software Engineer"
+        }
+    ],
+    "require": {
+        "php": "^8.2",
+        "illuminate/console": "^10.0||^11.0||^12.0",
+        "illuminate/contracts": "^10.0||^11.0||^12.0",
+        "illuminate/database": "^10.0||^11.0||^12.0",
+        "illuminate/support": "^10.0||^11.0||^12.0"
+    },
+    "require-dev": {
+        "laravel/pint": "^1.14",
+        "larastan/larastan": "^2.0",
+        "orchestra/testbench": "^8.0||^9.0||^10.0",
+        "phpstan/phpstan": "^1.10",
+        "phpunit/phpunit": "^10.5"
+    },
+    "autoload": {
+        "psr-4": {
+            "QuerySentinel\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "QuerySentinel\\Tests\\": "tests/"
+        }
+    },
+    "scripts": {
+        "analyse": "vendor/bin/phpstan analyse",
+        "test": "vendor/bin/phpunit",
+        "format": "vendor/bin/pint"
+    },
+    "config": {
+        "sort-packages": true
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "QuerySentinel\\QueryDiagnosticsServiceProvider"
+            ],
+            "aliases": {
+                "QueryDiagnostics": "QuerySentinel\\Facades\\QueryDiagnostics",
+                "QuerySentinel": "QuerySentinel\\Facades\\QuerySentinel"
+            }
+        }
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true
+}
