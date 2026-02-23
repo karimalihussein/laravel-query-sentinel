@@ -28,4 +28,18 @@ abstract class TestCase extends BaseTestCase
             'QueryDiagnostics' => \QuerySentinel\Facades\QueryDiagnostics::class,
         ];
     }
+
+    /**
+     * Use SQLite in-memory so tests run without MySQL/Postgres in CI.
+     */
+    protected function getEnvironmentSetUp($app): void
+    {
+        $app['config']->set('database.default', 'sqlite');
+        $app['config']->set('database.connections.sqlite', [
+            'driver' => 'sqlite',
+            'database' => ':memory:',
+            'prefix' => '',
+            'foreign_key_constraints' => true,
+        ]);
+    }
 }
