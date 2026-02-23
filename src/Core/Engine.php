@@ -70,7 +70,7 @@ final class Engine
      * Extracts SQL and bindings from the builder without executing it,
      * interpolates bindings safely, then delegates to core analyzer.
      *
-     * @param  \Illuminate\Database\Eloquent\Builder|\Illuminate\Database\Query\Builder  $builder
+     * @param  \Illuminate\Database\Eloquent\Builder<\Illuminate\Database\Eloquent\Model>|\Illuminate\Database\Query\Builder  $builder
      */
     public function analyzeBuilder(object $builder): Report
     {

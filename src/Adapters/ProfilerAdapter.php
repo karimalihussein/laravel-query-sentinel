@@ -43,9 +43,9 @@ final class ProfilerAdapter implements ProfilerInterface
         $captures = [];
         $listening = true;
 
-        // Register query listener
+        // Register query listener (listening guard for any late-firing callbacks)
         DB::listen(function ($query) use (&$captures, &$listening) {
-            if (! $listening) {
+            if (! $listening) { // @phpstan-ignore-line
                 return;
             }
 

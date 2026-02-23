@@ -63,7 +63,7 @@ final class QueryAnalyzer implements AnalyzerInterface
             executionTimeMs: $metrics['execution_time_ms'] ?? 0.0,
         );
 
-        $grade = $scores['grade'] ?? 'N/A';
+        $grade = $scores['grade'];
         $passed = ! $this->hasCriticalFindings($findings);
 
         return new Report(
@@ -72,7 +72,7 @@ final class QueryAnalyzer implements AnalyzerInterface
             passed: $passed,
             summary: $this->generateSummary($metrics, $scores, $findings),
             recommendations: $this->extractRecommendations($findings),
-            compositeScore: $scores['composite_score'] ?? 0.0,
+            compositeScore: $scores['composite_score'],
             analyzedAt: new \DateTimeImmutable,
             scalability: $scalability,
             mode: $mode,

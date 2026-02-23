@@ -5,5 +5,5 @@ parameters:
     paths:
         - src/
     level: 6
-    ignoreErrors: []
-    checkMissingIterableValueType: false
+    ignoreErrors:
+        - identifier: missingType.iterableValue

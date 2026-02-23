@@ -35,7 +35,7 @@ final class BuilderAdapter implements AdapterInterface
     /**
      * Analyze a Builder instance.
      *
-     * @param  EloquentBuilder|QueryBuilder  $input
+     * @param  EloquentBuilder<\Illuminate\Database\Eloquent\Model>|QueryBuilder  $input
      */
     public function analyze(mixed $input): Report
     {
@@ -43,6 +43,7 @@ final class BuilderAdapter implements AdapterInterface
 
         $rawSql = $query->toSql();
         $bindings = $query->getBindings();
+        /** @var \Illuminate\Database\Connection $connection */
         $connection = $query->getConnection();
 
         $interpolatedSql = $this->interpolateBindings($rawSql, $bindings, $connection);
@@ -86,7 +87,7 @@ final class BuilderAdapter implements AdapterInterface
     private function interpolateBindings(
         string $sql,
         array $bindings,
-        \Illuminate\Database\ConnectionInterface $connection,
+        \Illuminate\Database\Connection $connection,
     ): string {
         if (empty($bindings)) {
             return $sql;

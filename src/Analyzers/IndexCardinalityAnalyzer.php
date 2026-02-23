@@ -66,15 +66,15 @@ final class IndexCardinalityAnalyzer
 
         foreach ($analysis as $table => $indexes) {
             foreach ($indexes as $indexName => $indexData) {
-                if (! ($indexData['is_used'] ?? false)) {
+                if (! $indexData['is_used']) {
                     continue;
                 }
 
-                $columns = $indexData['columns'] ?? [];
+                $columns = $indexData['columns'];
                 ksort($columns);
                 $firstCol = reset($columns);
 
-                if ($firstCol && ! $this->isColumnInWhere($table, $firstCol['column'], $allFilterColumns)) {
+                if ($firstCol !== false && ! $this->isColumnInWhere($table, $firstCol['column'], $allFilterColumns)) {
                     $findings[] = new Finding(
                         severity: Severity::Warning,
                         category: 'index_cardinality',
@@ -89,8 +89,8 @@ final class IndexCardinalityAnalyzer
                     );
                 }
 
-                $tableRows = $indexData['table_rows'] ?? 0;
-                if ($firstCol && $firstCol['selectivity'] > 0 && $firstCol['selectivity'] < 0.01 && $tableRows > 1000) {
+                $tableRows = $indexData['table_rows'];
+                if ($firstCol !== false && $firstCol['selectivity'] > 0 && $firstCol['selectivity'] < 0.01 && $tableRows > 1000) {
                     $findings[] = new Finding(
                         severity: Severity::Optimization,
                         category: 'index_cardinality',

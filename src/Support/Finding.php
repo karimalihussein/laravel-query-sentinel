@@ -32,7 +32,7 @@ final readonly class Finding
     /**
      * Create a Finding from an existing rule-based finding array.
      *
-     * @param  array{severity?: string, title?: string, description?: string, recommendation?: string}  $legacy
+     * @param  array{severity?: string, category?: string, title?: string, description?: string, recommendation?: string}  $legacy
      */
     public static function fromLegacy(array $legacy): self
     {
