@@ -1,0 +1,141 @@
+laravel-query-sentinel/
+|
+|-- .github/
+|   \-- workflows/
+|       \-- ci.yml
+|
+|-- config/
+|   \-- query-diagnostics.php
+|
+|-- src/
+|   |-- QueryDiagnosticsServiceProvider.php
+|   |
+|   |-- Adapters/
+|   |   |-- BuilderAdapter.php
+|   |   |-- ClassMethodAdapter.php
+|   |   |-- ProfilerAdapter.php
+|   |   \-- SqlAdapter.php
+|   |
+|   |-- Analyzers/
+|   |   |-- EnvironmentAnalyzer.php
+|   |   |-- ExecutionProfileAnalyzer.php
+|   |   |-- IndexCardinalityAnalyzer.php
+|   |   |-- JoinAnalyzer.php
+|   |   |-- MetricsExtractor.php
+|   |   |-- PlanStabilityAnalyzer.php
+|   |   |-- RegressionSafetyAnalyzer.php
+|   |   \-- ScalabilityEstimator.php
+|   |
+|   |-- Attributes/
+|   |   \-- QueryDiagnose.php
+|   |
+|   |-- Console/
+|   |   |-- DiagnoseQueryCommand.php
+|   |   \-- ReportRenderer.php
+|   |
+|   |-- Contracts/
+|   |   |-- AdapterInterface.php
+|   |   |-- AnalyzerInterface.php
+|   |   \-- ProfilerInterface.php
+|   |
+|   |-- Core/
+|   |   |-- Engine.php
+|   |   |-- ProfileReport.php
+|   |   \-- QueryAnalyzer.php
+|   |
+|   |-- Diagnostics/
+|   |   \-- QueryDiagnostics.php
+|   |
+|   |-- Drivers/
+|   |   |-- MySqlDriver.php
+|   |   \-- PostgresDriver.php
+|   |
+|   |-- Enums/
+|   |   |-- ComplexityClass.php
+|   |   \-- Severity.php
+|   |
+|   |-- Exceptions/
+|   |   |-- PerformanceViolationException.php
+|   |   \-- UnsafeQueryException.php
+|   |
+|   |-- Facades/
+|   |   |-- QueryDiagnostics.php
+|   |   \-- QuerySentinel.php
+|   |
+|   |-- Interception/
+|   |   |-- ContainerProxy.php
+|   |   |-- MethodInterceptor.php
+|   |   |-- QueryCaptor.php
+|   |   \-- QueryDiagnoseMiddleware.php
+|   |
+|   |-- Logging/
+|   |   \-- ReportLogger.php
+|   |
+|   |-- Parsers/
+|   |   \-- ExplainPlanParser.php
+|   |
+|   |-- Rules/
+|   |   |-- DeepNestedLoopRule.php
+|   |   |-- FullTableScanRule.php
+|   |   |-- IndexMergeRule.php
+|   |   |-- LimitIneffectiveRule.php
+|   |   |-- NoIndexRule.php
+|   |   |-- QuadraticComplexityRule.php
+|   |   |-- StaleStatsRule.php
+|   |   |-- TempTableRule.php
+|   |   |-- WeedoutRule.php
+|   |
+|   |-- Scoring/
+|   |   \-- DefaultScoringEngine.php
+|   |
+|   |-- Support/
+|   |   |-- DiagnosticReport.php
+|   |   |-- EnvironmentContext.php
+|   |   |-- ExecutionGuard.php
+|   |   |-- ExecutionProfile.php
+|   |   |-- Finding.php
+|   |   |-- PlanNode.php
+|   |   |-- QueryCapture.php
+|   |   |-- Report.php
+|   |   |-- SamplingGuard.php
+|   |   |-- SqlParser.php
+|   |   |-- SqlSanitizer.php
+|   |   \-- ThresholdGuard.php
+|
+|-- tests/
+|   |-- Feature/
+|   |   |-- ContainerProxyTest.php
+|   |   |-- DiagnosticEngineTest.php
+|   |   |-- EngineTest.php
+|   |   |-- MethodInterceptorTest.php
+|   |   |-- MiddlewareTest.php
+|   |   |-- QueryCaptorTest.php
+|   |   |-- QueryDiagnosticsTest.php
+|   |   |-- ReportLoggerTest.php
+|   |   \-- ServiceProviderTest.php
+|   |
+|   \-- Unit/
+|       |-- ExecutionGuardTest.php
+|       |-- ExplainPlanParserTest.php
+|       |-- PerformanceViolationExceptionTest.php
+|       |-- ProfileReportTest.php
+|       |-- QueryCaptureTest.php
+|       |-- QueryDiagnoseAttributeTest.php
+|       |-- ReportTest.php
+|       |-- RuleRegistryTest.php
+|       |-- RulesTest.php
+|       |-- SamplingGuardTest.php
+|       |-- ScalabilityEstimatorTest.php
+|       |-- ScoringEngineTest.php
+|       |-- SqlSanitizerTest.php
+|       \-- ThresholdGuardTest.php
+|
+|-- .gitignore
+|-- composer.json
+|-- composer.lock
+|-- LICENSE.md
+|-- package-structure.txt
+|-- phpstan.neon.dist
+|-- phpunit.xml.dist
+|-- pint.json
+\-- README.md
