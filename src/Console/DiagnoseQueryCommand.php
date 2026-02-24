@@ -6,6 +6,7 @@ namespace QuerySentinel\Console;
 
 use Illuminate\Console\Command;
 use QuerySentinel\Core\Engine;
+use QuerySentinel\Exceptions\EngineAbortException;
 
 final class DiagnoseQueryCommand extends Command
 {
@@ -36,8 +37,18 @@ final class DiagnoseQueryCommand extends Command
 
     private function handleDeep(Engine $engine, string $sql, ReportRenderer $renderer): int
     {
-        $connectionName = $this->option('connection');
-        $diagnostic = $engine->diagnose($sql, $connectionName);
+        try {
+            $connectionName = $this->option('connection');
+            $diagnostic = $engine->diagnose($sql, $connectionName);
+        } catch (EngineAbortException $e) {
+            if ($this->option('json')) {
+                $this->line($e->failureReport->toJson(JSON_PRETTY_PRINT));
+            } else {
+                $renderer->renderValidationFailure($this, $e->failureReport, $sql);
+            }
+
+            return self::FAILURE;
+        }
 
         if ($this->option('json')) {
             $this->line($diagnostic->toJson(JSON_PRETTY_PRINT));
@@ -54,7 +65,17 @@ final class DiagnoseQueryCommand extends Command
 
     private function handleShallow(Engine $engine, string $sql, ReportRenderer $renderer): int
     {
-        $report = $engine->analyzeSql($sql);
+        try {
+            $report = $engine->analyzeSql($sql);
+        } catch (EngineAbortException $e) {
+            if ($this->option('json')) {
+                $this->line($e->failureReport->toJson(JSON_PRETTY_PRINT));
+            } else {
+                $renderer->renderValidationFailure($this, $e->failureReport, $sql);
+            }
+
+            return self::FAILURE;
+        }
 
         if ($this->option('json')) {
             $this->line($report->toJson(JSON_PRETTY_PRINT));
