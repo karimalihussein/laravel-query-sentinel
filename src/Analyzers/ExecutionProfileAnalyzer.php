@@ -187,28 +187,45 @@ final class ExecutionProfileAnalyzer
         return [$logicalReads, $physicalReads];
     }
 
+    /**
+     * Classify scan complexity from access type in metrics.
+     *
+     * Uses the pre-computed complexity from MetricsExtractor which is
+     * derived from actual access types (not heuristics).
+     */
     private function classifyScanComplexity(string $plan, array $metrics): ComplexityClass
     {
-        if ($metrics['has_early_termination'] ?? false) {
-            return ComplexityClass::Limit;
-        }
-        if (($metrics['has_table_scan'] ?? false) && ($metrics['max_loops'] ?? 0) > 10_000) {
-            return ComplexityClass::Quadratic;
-        }
-        if ($metrics['has_table_scan'] ?? false) {
-            return ComplexityClass::Linear;
-        }
-        if (preg_match('/Index range scan/i', $plan)) {
-            return ComplexityClass::Range;
+        $complexityValue = $metrics['complexity'] ?? null;
+        if ($complexityValue !== null) {
+            $complexity = ComplexityClass::tryFrom($complexityValue);
+            if ($complexity !== null) {
+                return $complexity;
+            }
         }
 
-        return ComplexityClass::Range;
+        // Fallback: derive from access type
+        $accessType = $metrics['primary_access_type'] ?? null;
+
+        return match ($accessType) {
+            'zero_row_const', 'const_row', 'single_row_lookup' => ComplexityClass::Constant,
+            'covering_index_lookup', 'index_lookup', 'fulltext_index' => ComplexityClass::Logarithmic,
+            'index_range_scan' => ComplexityClass::LogRange,
+            'index_scan' => ComplexityClass::Linear,
+            'table_scan' => ComplexityClass::Linear,
+            default => ComplexityClass::Linear,
+        };
     }
 
+    /**
+     * Classify sort complexity.
+     *
+     * No sort needed → O(1) (constant, no work).
+     * Filesort → O(n log n).
+     */
     private function classifySortComplexity(array $metrics): ComplexityClass
     {
         if (! ($metrics['has_filesort'] ?? false)) {
-            return ComplexityClass::Limit;
+            return ComplexityClass::Constant;
         }
 
         return ComplexityClass::Linearithmic;
