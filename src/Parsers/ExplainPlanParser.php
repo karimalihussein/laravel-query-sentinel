@@ -160,14 +160,16 @@ final class ExplainPlanParser implements PlanParserInterface
         $operation = $this->extractOperation($content);
 
         // Estimated cost and rows: (cost=X rows=Y)
+        // rows may use scientific notation (e.g. 1e+6)
         $estimatedCost = null;
         $estimatedRows = null;
-        if (preg_match('/\(cost=([\d.,]+)\s+rows=([\d.]+)\)/', $content, $m)) {
+        if (preg_match('/\(cost=([\d.,]+)\s+rows=([\d.eE+]+)\)/', $content, $m)) {
             $estimatedCost = (float) str_replace(',', '', $m[1]);
             $estimatedRows = (float) $m[2];
         }
 
         // Actual execution: (actual time=X..Y rows=Z loops=W)
+        // rows/loops may use scientific notation (e.g. 1e+6, 1.5e+3)
         $actualTimeStart = null;
         $actualTimeEnd = null;
         $actualRows = null;
@@ -175,14 +177,14 @@ final class ExplainPlanParser implements PlanParserInterface
         $neverExecuted = str_contains($content, 'never executed');
 
         if (! $neverExecuted && preg_match(
-            '/\(actual time=([\d.]+)\.\.([\d.]+)\s+rows=(\d+)\s+loops=(\d+)\)/',
+            '/\(actual time=([\d.]+)\.\.([\d.]+)\s+rows=([\d.eE+]+)\s+loops=([\d.eE+]+)\)/',
             $content,
             $m
         )) {
             $actualTimeStart = (float) $m[1];
             $actualTimeEnd = (float) $m[2];
-            $actualRows = (int) $m[3];
-            $loops = (int) $m[4];
+            $actualRows = (int) round((float) $m[3]);
+            $loops = (int) round((float) $m[4]);
         }
 
         // Table name: "on TABLE_NAME" pattern
@@ -225,11 +227,17 @@ final class ExplainPlanParser implements PlanParserInterface
     }
 
     /**
-     * Extract table name from "scan on TABLE", "lookup on TABLE", etc.
+     * Extract table name from "scan on TABLE", "lookup on TABLE",
+     * "Constant row from TABLE", etc.
      */
     private function extractTable(string $content): ?string
     {
         if (preg_match('/(?:scan|lookup|search)\s+on\s+(\w+)/i', $content, $m)) {
+            return $m[1];
+        }
+
+        // "Constant row from TABLE"
+        if (preg_match('/Constant row from\s+(\w+)/i', $content, $m)) {
             return $m[1];
         }
 
@@ -260,31 +268,80 @@ final class ExplainPlanParser implements PlanParserInterface
      *
      * Returns a normalized access type string for metric computation.
      */
+    /**
+     * Classify the access type from the operation description.
+     *
+     * Returns a normalized access type string for metric computation.
+     * Order matters: more specific patterns must be checked before general ones.
+     *
+     * Access type mapping to MySQL EXPLAIN types:
+     *   zero_row_const           → const (O(1))
+     *   const_row                → const (O(1))
+     *   single_row_lookup        → eq_ref (O(1))
+     *   covering_index_lookup    → ref + covering (O(log n))
+     *   index_lookup             → ref (O(log n))
+     *   index_range_scan         → range (O(log n + k))
+     *   index_scan               → index (O(n))
+     *   table_scan               → ALL (O(n))
+     */
     private function classifyAccessType(string $operation): ?string
     {
         $lower = strtolower($operation);
 
-        if (str_starts_with($lower, 'table scan')) {
-            return 'table_scan';
+        // Const access: "Zero rows (no matching row in const table)"
+        if (str_starts_with($lower, 'zero rows')) {
+            return 'zero_row_const';
         }
-        if (str_starts_with($lower, 'index lookup')) {
-            return 'index_lookup';
+
+        // Const access: "Constant row from TABLE"
+        if (str_starts_with($lower, 'constant row')) {
+            return 'const_row';
         }
-        if (str_starts_with($lower, 'index range scan')) {
-            return 'index_range_scan';
+
+        // Const access: "Rows fetched before execution"
+        if (str_starts_with($lower, 'rows fetched before execution')) {
+            return 'const_row';
         }
-        if (str_starts_with($lower, 'covering index lookup') || str_starts_with($lower, 'single-row covering index lookup')) {
-            return 'covering_index_lookup';
+
+        // Single-row lookups (eq_ref/const) — check BEFORE general lookups
+        if (str_starts_with($lower, 'single-row covering index lookup')) {
+            return 'single_row_lookup';
         }
         if (str_starts_with($lower, 'single-row index lookup')) {
             return 'single_row_lookup';
         }
+
+        // Table scan — ALL
+        if (str_starts_with($lower, 'table scan')) {
+            return 'table_scan';
+        }
+
+        // Index range scan — range
+        if (str_starts_with($lower, 'index range scan')) {
+            return 'index_range_scan';
+        }
+
+        // Covering index lookup — ref with covering
+        if (str_starts_with($lower, 'covering index lookup')) {
+            return 'covering_index_lookup';
+        }
+
+        // Index lookup — ref
+        if (str_starts_with($lower, 'index lookup')) {
+            return 'index_lookup';
+        }
+
+        // Index scan (full) — index
         if (str_starts_with($lower, 'index scan')) {
             return 'index_scan';
         }
+
+        // Full-text index
         if (str_starts_with($lower, 'full-text index')) {
             return 'fulltext_index';
         }
+
+        // Control-flow / join nodes (not I/O access types)
         if (str_contains($lower, 'nested loop')) {
             return 'nested_loop';
         }
