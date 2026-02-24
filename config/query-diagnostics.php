@@ -27,6 +27,22 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Validation Strict Mode
+    |--------------------------------------------------------------------------
+    |
+    | When true (default): fail-safe pipeline — validate syntax, schema, joins
+    | before EXPLAIN. Abort on any failure. No fake scoring.
+    | When false: legacy behavior — run EXPLAIN directly, allow analysis even
+    | when EXPLAIN returns error (e.g. for SQLite in tests).
+    |
+    */
+
+    'validation' => [
+        'strict' => env('QUERY_SENTINEL_VALIDATION_STRICT', true),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Scoring Configuration
     |--------------------------------------------------------------------------
     |
@@ -194,6 +210,123 @@ return [
             // \App\Services\MyService::class,
         ],
 
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Cardinality Drift (Phase 1)
+    |--------------------------------------------------------------------------
+    */
+
+    'cardinality_drift' => [
+        'warning_threshold' => 0.5,
+        'critical_threshold' => 0.9,
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Anti-Pattern Detection (Phase 3)
+    |--------------------------------------------------------------------------
+    */
+
+    'anti_patterns' => [
+        'enabled' => true,
+        'or_chain_threshold' => 3,
+        'missing_limit_row_threshold' => 10000,
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Index Synthesis (Phase 4)
+    |--------------------------------------------------------------------------
+    */
+
+    'index_synthesis' => [
+        'max_recommendations' => 3,
+        'max_columns_per_index' => 5,
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Confidence Scoring (Phase 5)
+    |--------------------------------------------------------------------------
+    */
+
+    'confidence' => [
+        'minimum_for_findings' => 0.3,
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Concurrency Risk (Phase 6)
+    |--------------------------------------------------------------------------
+    */
+
+    'concurrency' => [
+        'enabled' => true,
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Memory Pressure (Phase 7)
+    |--------------------------------------------------------------------------
+    */
+
+    'memory_pressure' => [
+        'high_threshold_bytes' => 268435456,     // 256MB
+        'moderate_threshold_bytes' => 67108864,   // 64MB
+        'concurrent_sessions' => 10,
+        'network_transfer_threshold_bytes' => 52428800,  // 50MB
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Hypothetical Index Simulation (Phase 10)
+    |--------------------------------------------------------------------------
+    */
+
+    'hypothetical_index' => [
+        'enabled' => false,
+        'max_simulations' => 3,
+        'timeout_seconds' => 5,
+        'allowed_environments' => ['local', 'testing'],
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Workload-Level Modeling
+    |--------------------------------------------------------------------------
+    |
+    | Tracks query patterns over time to detect repeated full exports,
+    | API misuse bursts, and high-frequency large network transfers.
+    |
+    */
+
+    'workload' => [
+        'enabled' => true,
+        'frequency_threshold' => 10,           // snapshots to consider "frequent"
+        'export_row_threshold' => 100_000,     // rows to consider a "full export"
+        'network_bytes_threshold' => 52428800, // 50MB
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Regression Baselines (Phase 9)
+    |--------------------------------------------------------------------------
+    */
+
+    'regression' => [
+        'enabled' => true,
+        'storage_path' => null,  // defaults to storage_path('query-sentinel/baselines')
+        'max_history' => 10,
+        'score_warning_threshold' => 10,
+        'score_critical_threshold' => 25,
+        'time_warning_threshold' => 50,
+        'time_critical_threshold' => 200,
+        'absolute_time_threshold' => 5,      // ms — require delta > 5ms in addition to percentage
+        'absolute_score_threshold' => 5,     // points — require delta > 5pts in addition to percentage
+        'noise_floor_ms' => 3,               // ignore time deltas below 3ms (timing jitter)
+        'minimum_measurable_ms' => 5,        // suppress time regression warnings when baseline < 5ms
     ],
 
 ];
