@@ -226,4 +226,65 @@ final class RulesTest extends TestCase
             'indexes_used' => ['PRIMARY'],
         ]));
     }
+
+    public function test_no_index_rule_does_not_trigger_for_zero_row_const(): void
+    {
+        $rule = new NoIndexRule;
+        $this->assertNull($rule->evaluate([
+            'is_index_backed' => false,
+            'indexes_used' => [],
+            'is_zero_row_const' => true,
+            'tables_accessed' => ['users'],
+        ]));
+    }
+
+    public function test_no_index_rule_does_not_trigger_for_const_row(): void
+    {
+        $rule = new NoIndexRule;
+        $this->assertNull($rule->evaluate([
+            'is_index_backed' => false,
+            'indexes_used' => [],
+            'is_zero_row_const' => false,
+            'primary_access_type' => 'const_row',
+            'tables_accessed' => ['users'],
+        ]));
+    }
+
+    public function test_no_index_rule_does_not_trigger_for_single_row_lookup(): void
+    {
+        $rule = new NoIndexRule;
+        $this->assertNull($rule->evaluate([
+            'is_index_backed' => false,
+            'indexes_used' => [],
+            'is_zero_row_const' => false,
+            'primary_access_type' => 'single_row_lookup',
+            'tables_accessed' => ['users'],
+        ]));
+    }
+
+    // QuadraticComplexityRule — negative cases
+
+    public function test_quadratic_complexity_does_not_trigger_for_constant(): void
+    {
+        $rule = new QuadraticComplexityRule;
+        $this->assertNull($rule->evaluate(['complexity' => 'O(1)']));
+    }
+
+    public function test_quadratic_complexity_does_not_trigger_for_logarithmic(): void
+    {
+        $rule = new QuadraticComplexityRule;
+        $this->assertNull($rule->evaluate(['complexity' => 'O(log n)']));
+    }
+
+    public function test_quadratic_complexity_does_not_trigger_for_log_range(): void
+    {
+        $rule = new QuadraticComplexityRule;
+        $this->assertNull($rule->evaluate(['complexity' => 'O(log n + k)']));
+    }
+
+    public function test_quadratic_complexity_does_not_trigger_for_linearithmic(): void
+    {
+        $rule = new QuadraticComplexityRule;
+        $this->assertNull($rule->evaluate(['complexity' => 'O(n log n)']));
+    }
 }

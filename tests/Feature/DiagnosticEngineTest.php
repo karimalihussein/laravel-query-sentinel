@@ -103,8 +103,8 @@ final class DiagnosticEngineTest extends TestCase
             btreeDepths: ['PRIMARY' => 3],
             logicalReads: 5000,
             physicalReads: 50,
-            scanComplexity: ComplexityClass::Range,
-            sortComplexity: ComplexityClass::Limit,
+            scanComplexity: ComplexityClass::Logarithmic,
+            sortComplexity: ComplexityClass::Constant,
         );
 
         $array = $profile->toArray();
@@ -112,8 +112,8 @@ final class DiagnosticEngineTest extends TestCase
         $this->assertSame(2, $array['nested_loop_depth']);
         $this->assertSame(['users' => 100.0], $array['join_fanouts']);
         $this->assertSame(5000, $array['logical_reads']);
-        $this->assertSame('O(range)', $array['scan_complexity']);
-        $this->assertSame('O(limit)', $array['sort_complexity']);
+        $this->assertSame('O(log n)', $array['scan_complexity']);
+        $this->assertSame('O(1)', $array['sort_complexity']);
     }
 
     // ---------------------------------------------------------------
@@ -237,8 +237,8 @@ final class DiagnosticEngineTest extends TestCase
             btreeDepths: [],
             logicalReads: 100,
             physicalReads: 5,
-            scanComplexity: ComplexityClass::Range,
-            sortComplexity: ComplexityClass::Limit,
+            scanComplexity: ComplexityClass::Logarithmic,
+            sortComplexity: ComplexityClass::Constant,
         );
 
         $report = new DiagnosticReport(
@@ -342,7 +342,7 @@ final class DiagnosticEngineTest extends TestCase
         $this->assertSame(2, $profile->nestedLoopDepth);
     }
 
-    public function test_execution_profile_classifies_scan_complexity_limit(): void
+    public function test_execution_profile_classifies_scan_complexity_constant(): void
     {
         $plan = "-> Limit (actual time=0.01..0.02 rows=10 loops=1)\n";
 
@@ -351,9 +351,11 @@ final class DiagnosticEngineTest extends TestCase
             'rows_examined' => 10,
             'has_early_termination' => true,
             'has_table_scan' => false,
+            'complexity' => 'O(1)',
+            'primary_access_type' => 'single_row_lookup',
         ], []);
 
-        $this->assertSame(ComplexityClass::Limit, $result['profile']->scanComplexity);
+        $this->assertSame(ComplexityClass::Constant, $result['profile']->scanComplexity);
     }
 
     public function test_execution_profile_classifies_sort_complexity(): void
@@ -364,7 +366,7 @@ final class DiagnosticEngineTest extends TestCase
         $this->assertSame(ComplexityClass::Linearithmic, $withFilesort['profile']->sortComplexity);
 
         $noFilesort = $analyzer->analyze('plan', ['rows_examined' => 0, 'has_filesort' => false], []);
-        $this->assertSame(ComplexityClass::Limit, $noFilesort['profile']->sortComplexity);
+        $this->assertSame(ComplexityClass::Constant, $noFilesort['profile']->sortComplexity);
     }
 
     public function test_execution_profile_deep_nesting_warning(): void
@@ -510,6 +512,184 @@ final class DiagnosticEngineTest extends TestCase
         $this->assertFalse($result['safety']['has_charset_conversion']);
         $this->assertEmpty($result['safety']['type_conversions']);
         $this->assertEmpty($result['findings']);
+    }
+
+    // ---------------------------------------------------------------
+    // PlanNode: isConstAccess and isIoOperation
+    // ---------------------------------------------------------------
+
+    public function test_plan_node_is_const_access(): void
+    {
+        $constTypes = ['zero_row_const', 'const_row', 'single_row_lookup'];
+        foreach ($constTypes as $type) {
+            $node = new \QuerySentinel\Support\PlanNode(
+                operation: "test $type",
+                rawLine: '',
+                accessType: $type,
+            );
+            $this->assertTrue($node->isConstAccess(), "$type should be const access");
+        }
+
+        $nonConstTypes = ['index_lookup', 'covering_index_lookup', 'table_scan', 'index_range_scan', 'index_scan', null];
+        foreach ($nonConstTypes as $type) {
+            $node = new \QuerySentinel\Support\PlanNode(
+                operation: 'test',
+                rawLine: '',
+                accessType: $type,
+            );
+            $typeName = $type ?? 'null';
+            $this->assertFalse($node->isConstAccess(), "$typeName should NOT be const access");
+        }
+    }
+
+    public function test_plan_node_is_io_operation(): void
+    {
+        $ioTypes = ['table_scan', 'index_lookup', 'index_range_scan', 'covering_index_lookup',
+            'single_row_lookup', 'index_scan', 'fulltext_index', 'const_row'];
+        foreach ($ioTypes as $type) {
+            $node = new \QuerySentinel\Support\PlanNode(
+                operation: "test $type",
+                rawLine: '',
+                accessType: $type,
+            );
+            $this->assertTrue($node->isIoOperation(), "$type should be I/O operation");
+        }
+
+        // zero_row_const is NOT I/O
+        $node = new \QuerySentinel\Support\PlanNode(
+            operation: 'Zero rows',
+            rawLine: '',
+            accessType: 'zero_row_const',
+        );
+        $this->assertFalse($node->isIoOperation(), 'zero_row_const should NOT be I/O operation');
+
+        // Non-I/O types
+        $nonIoTypes = ['nested_loop', 'sort', 'filter', 'limit', 'materialize', null];
+        foreach ($nonIoTypes as $type) {
+            $node = new \QuerySentinel\Support\PlanNode(
+                operation: 'test',
+                rawLine: '',
+                accessType: $type,
+            );
+            $typeName = $type ?? 'null';
+            $this->assertFalse($node->isIoOperation(), "$typeName should NOT be I/O operation");
+        }
+    }
+
+    public function test_plan_node_rows_processed(): void
+    {
+        $node = new \QuerySentinel\Support\PlanNode(
+            operation: 'Index lookup on users',
+            rawLine: '',
+            actualRows: 50,
+            loops: 100,
+        );
+        $this->assertSame(5000, $node->rowsProcessed());
+
+        // Null values → 0
+        $node2 = new \QuerySentinel\Support\PlanNode(
+            operation: 'test',
+            rawLine: '',
+        );
+        $this->assertSame(0, $node2->rowsProcessed());
+    }
+
+    public function test_plan_node_flatten(): void
+    {
+        $child1 = new \QuerySentinel\Support\PlanNode(operation: 'child1', rawLine: '');
+        $child2 = new \QuerySentinel\Support\PlanNode(operation: 'child2', rawLine: '');
+        $grandchild = new \QuerySentinel\Support\PlanNode(operation: 'grandchild', rawLine: '');
+        $child1->children = [$grandchild];
+
+        $root = new \QuerySentinel\Support\PlanNode(operation: 'root', rawLine: '');
+        $root->children = [$child1, $child2];
+
+        $flat = $root->flatten();
+        $this->assertCount(4, $flat);
+        $this->assertSame('root', $flat[0]->operation);
+        $this->assertSame('child1', $flat[1]->operation);
+        $this->assertSame('grandchild', $flat[2]->operation);
+        $this->assertSame('child2', $flat[3]->operation);
+    }
+
+    // ---------------------------------------------------------------
+    // ExecutionProfileAnalyzer: scan complexity from various access types
+    // ---------------------------------------------------------------
+
+    public function test_execution_profile_scan_complexity_from_precomputed_metrics(): void
+    {
+        $analyzer = new ExecutionProfileAnalyzer;
+
+        $testCases = [
+            ['complexity' => 'O(1)', 'expected' => ComplexityClass::Constant],
+            ['complexity' => 'O(log n)', 'expected' => ComplexityClass::Logarithmic],
+            ['complexity' => 'O(log n + k)', 'expected' => ComplexityClass::LogRange],
+            ['complexity' => 'O(n)', 'expected' => ComplexityClass::Linear],
+            ['complexity' => 'O(n log n)', 'expected' => ComplexityClass::Linearithmic],
+            ['complexity' => 'O(n²)', 'expected' => ComplexityClass::Quadratic],
+        ];
+
+        foreach ($testCases as $case) {
+            $result = $analyzer->analyze('plan text', [
+                'rows_examined' => 0,
+                'complexity' => $case['complexity'],
+            ], []);
+
+            $this->assertSame(
+                $case['expected'],
+                $result['profile']->scanComplexity,
+                "Complexity {$case['complexity']} should map to {$case['expected']->name}"
+            );
+        }
+    }
+
+    public function test_execution_profile_scan_complexity_fallback_from_access_type(): void
+    {
+        $analyzer = new ExecutionProfileAnalyzer;
+
+        // No pre-computed complexity → fallback to access type
+        $result = $analyzer->analyze('plan', [
+            'rows_examined' => 0,
+            'primary_access_type' => 'zero_row_const',
+        ], []);
+
+        $this->assertSame(ComplexityClass::Constant, $result['profile']->scanComplexity);
+    }
+
+    public function test_execution_profile_scan_complexity_fallback_covering_index(): void
+    {
+        $analyzer = new ExecutionProfileAnalyzer;
+
+        $result = $analyzer->analyze('plan', [
+            'rows_examined' => 0,
+            'primary_access_type' => 'covering_index_lookup',
+        ], []);
+
+        $this->assertSame(ComplexityClass::Logarithmic, $result['profile']->scanComplexity);
+    }
+
+    public function test_execution_profile_scan_complexity_fallback_index_range(): void
+    {
+        $analyzer = new ExecutionProfileAnalyzer;
+
+        $result = $analyzer->analyze('plan', [
+            'rows_examined' => 0,
+            'primary_access_type' => 'index_range_scan',
+        ], []);
+
+        $this->assertSame(ComplexityClass::LogRange, $result['profile']->scanComplexity);
+    }
+
+    public function test_execution_profile_scan_complexity_fallback_table_scan(): void
+    {
+        $analyzer = new ExecutionProfileAnalyzer;
+
+        $result = $analyzer->analyze('plan', [
+            'rows_examined' => 0,
+            'primary_access_type' => 'table_scan',
+        ], []);
+
+        $this->assertSame(ComplexityClass::Linear, $result['profile']->scanComplexity);
     }
 
     // ---------------------------------------------------------------
