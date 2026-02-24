@@ -27,4 +27,33 @@ interface DriverInterface
      * Whether this driver supports EXPLAIN ANALYZE.
      */
     public function supportsAnalyze(): bool;
+
+    /**
+     * Normalize a raw access type string to a cross-driver canonical form.
+     */
+    public function normalizeAccessType(string $rawType): string;
+
+    /**
+     * Normalize a raw join type string to a cross-driver canonical form.
+     */
+    public function normalizeJoinType(string $rawType): string;
+
+    /**
+     * Run ANALYZE TABLE (or equivalent) to refresh statistics.
+     */
+    public function runAnalyzeTable(string $table): void;
+
+    /**
+     * Get column statistics for a specific table.column.
+     *
+     * @return array<string, mixed> Keys: has_histogram, distinct_count, null_fraction, avg_width
+     */
+    public function getColumnStats(string $table, string $column): array;
+
+    /**
+     * Get the driver's capability flags.
+     *
+     * @return array<string, bool> Possible keys: histograms, explain_analyze, json_explain, covering_index_info, parallel_query
+     */
+    public function getCapabilities(): array;
 }

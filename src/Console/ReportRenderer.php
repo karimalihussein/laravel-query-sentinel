@@ -10,6 +10,7 @@ use QuerySentinel\Support\EnvironmentContext;
 use QuerySentinel\Support\ExecutionProfile;
 use QuerySentinel\Support\Finding;
 use QuerySentinel\Support\Report;
+use QuerySentinel\Support\ValidationFailureReport;
 
 /**
  * Enhanced console formatter with traffic-light coloring.
@@ -57,13 +58,27 @@ final class ReportRenderer
             $this->renderExecutionProfile($command, $diagnostic->executionProfile);
         }
 
-        // 8. Category-grouped findings
+        // 8. Cardinality Drift (Phase 1)
+        if ($diagnostic->cardinalityDrift !== null) {
+            $this->renderCardinalityDrift($command, $diagnostic->cardinalityDrift);
+        }
+
+        // 9. Category-grouped findings
         $categories = [
             'rule' => 'Rule-Based Findings',
             'index_cardinality' => 'Index & Cardinality Analysis',
+            'cardinality_drift' => 'Cardinality Drift',
             'join_analysis' => 'Join Analysis',
+            'anti_pattern' => 'SQL Anti-Patterns',
+            'index_synthesis' => 'Index Recommendations',
+            'memory_pressure' => 'Memory Pressure',
+            'concurrency' => 'Concurrency Risk',
             'plan_stability' => 'Plan Stability & Risk',
             'regression_safety' => 'Regression & Safety',
+            // 'regression' omitted — rendered by dedicated renderRegression() section
+            'hypothetical_index' => 'Hypothetical Index Results',
+            'workload' => 'Workload Patterns',
+            'confidence' => 'Confidence',
             'execution_metrics' => 'Execution Metrics',
             'environment' => 'Environment',
             'complexity' => 'Complexity Classification',
@@ -77,21 +92,55 @@ final class ReportRenderer
             }
         }
 
-        // 9. Scalability
+        // 10. Confidence Score (Phase 5)
+        if ($diagnostic->confidence !== null) {
+            $this->renderConfidence($command, $diagnostic->confidence);
+        }
+
+        // 12. Memory Pressure (Phase 7)
+        if ($diagnostic->memoryPressure !== null) {
+            $this->renderMemoryPressure($command, $diagnostic->memoryPressure);
+        }
+
+        // 13. Concurrency Risk (Phase 6)
+        if ($diagnostic->concurrencyRisk !== null) {
+            $this->renderConcurrencyRisk($command, $diagnostic->concurrencyRisk);
+        }
+
+        // 14. Regression Baselines (Phase 9)
+        if ($diagnostic->regression !== null) {
+            $this->renderRegression($command, $diagnostic->regression);
+        }
+
+        // 15. Hypothetical Index Results (Phase 10)
+        if ($diagnostic->hypotheticalIndexes !== null) {
+            $this->renderHypotheticalIndexes($command, $diagnostic->hypotheticalIndexes);
+        }
+
+        // 15b. Workload Patterns
+        if ($diagnostic->workload !== null) {
+            $this->renderWorkload($command, $diagnostic->workload);
+        }
+
+        // 16. Scalability
         if (! empty($report->scalability)) {
             $this->renderScalability($command, $report->scalability);
         }
 
-        // 10. Actionable Recommendations
-        $actionable = array_filter(
-            $diagnostic->findings,
-            fn (Finding $f) => $f->recommendation !== null
-        );
+        // 17. Actionable Recommendations (deduplicated by recommendation text)
+        $seen = [];
+        $actionable = [];
+        foreach ($diagnostic->findings as $f) {
+            if ($f->recommendation !== null && ! isset($seen[$f->recommendation])) {
+                $seen[$f->recommendation] = true;
+                $actionable[] = $f;
+            }
+        }
         if (! empty($actionable)) {
-            $this->renderRecommendations($command, array_values($actionable));
+            $this->renderRecommendations($command, $actionable);
         }
 
-        // 11. Full EXPLAIN ANALYZE Plan
+        // 18. Full EXPLAIN ANALYZE Plan
         $this->renderPlan($command, $result->plan);
     }
 
@@ -174,26 +223,108 @@ final class ReportRenderer
         $this->renderPlan($command, $report->result->plan);
     }
 
+    /**
+     * Render validation failure report (no scoring, no performance section).
+     */
+    public function renderValidationFailure(Command $command, ValidationFailureReport $report, string $sql): void
+    {
+        $command->newLine();
+        $command->line('<fg=red>=========================================================</>');
+        $command->line('<fg=red;options=bold>  PERFORMANCE ADVISORY REPORT</></>');
+        $command->line('<fg=red>=========================================================</>');
+        $command->newLine();
+        $command->line('  <fg=red;options=bold>Status: ERROR — Validation Failed</>');
+        $command->line('  Grade: N/A');
+        $command->line('  Analysis: Aborted');
+        $command->newLine();
+        $command->line(sprintf('  Failure Stage: %s', $report->failureStage));
+        $command->newLine();
+        $command->line('  Detailed Error:');
+        $command->line('  ---------------------------------------------');
+        $command->line('  ' . str_replace("\n", "\n  ", $report->detailedError));
+        if ($report->sqlstateCode !== null) {
+            $command->line(sprintf('  SQLSTATE: %s', $report->sqlstateCode));
+        }
+        if ($report->lineNumber !== null) {
+            $command->line(sprintf('  Line: %d', $report->lineNumber));
+        }
+        $command->line('  ---------------------------------------------');
+        $command->newLine();
+        if (! empty($report->recommendations)) {
+            $command->line('<fg=yellow>  Recommendation:</>');
+            foreach ($report->recommendations as $rec) {
+                $command->line(sprintf('  - %s', $rec));
+            }
+            $command->newLine();
+        }
+        if ($report->suggestion !== null) {
+            $command->line(sprintf('  <fg=cyan>Did you mean: %s ?</>', $report->suggestion));
+            $command->newLine();
+        }
+        if ($report->missingTable !== null) {
+            $command->line(sprintf('  Missing Table: %s', $report->missingTable));
+            if ($report->database !== null) {
+                $command->line(sprintf('  Database: %s', $report->database));
+            }
+            $command->newLine();
+        }
+        if ($report->missingColumn !== null && $report->missingTable !== null) {
+            $command->line(sprintf('  Missing Column: %s (Table: %s)', $report->missingColumn, $report->missingTable));
+            $command->newLine();
+        }
+        $command->line('  Raw SQL:');
+        $command->line('  ----------------------------------------------------------------------');
+        $command->line('  ' . str_replace("\n", "\n  ", trim($sql)));
+        $command->line('  ----------------------------------------------------------------------');
+        $command->newLine();
+    }
+
     private function renderExecutiveSummary(Command $command, DiagnosticReport $diagnostic): void
     {
         $worst = $diagnostic->worstSeverity();
-        $color = $worst->consoleColor();
         $counts = $diagnostic->findingCounts();
         $report = $diagnostic->report;
 
-        $statusLabel = match ($worst->value) {
-            'critical' => 'FAIL — Critical issues detected',
-            'warning' => 'WARN — Warnings present',
-            'optimization' => 'OK — Optimizations available',
-            default => 'PASS — No issues detected',
-        };
+        // Use confidence-adjusted grade and score
+        $effectiveGrade = $diagnostic->effectiveGrade();
+        $effectiveScore = $diagnostic->effectiveCompositeScore();
+
+        // When effective score is high and no critical findings, status reflects
+        // the score (not worst severity) to avoid Score=100 + Status=WARN contradiction.
+        if ($effectiveScore >= 90.0 && $counts['critical'] === 0) {
+            if ($counts['warning'] > 0 || $counts['optimization'] > 0) {
+                $statusLabel = 'OK — Minor observations present';
+                $color = 'green';
+            } else {
+                $statusLabel = 'PASS — No issues detected';
+                $color = 'green';
+            }
+        } else {
+            $color = $worst->consoleColor();
+            $statusLabel = match ($worst->value) {
+                'critical' => 'FAIL — Critical issues detected',
+                'warning' => 'WARN — Warnings present',
+                'optimization' => 'OK — Optimizations available',
+                default => 'PASS — No issues detected',
+            };
+        }
 
         $command->line(sprintf('<fg=%s>=========================================================</>', $color));
         $command->line(sprintf('<fg=%s;options=bold>  PERFORMANCE ADVISORY REPORT</>', $color));
         $command->line(sprintf('<fg=%s>=========================================================</>', $color));
         $command->newLine();
         $command->line(sprintf('  Status:     <fg=%s;options=bold>%s</>', $color, $statusLabel));
-        $command->line(sprintf('  Grade:      <fg=%s;options=bold>%s</> (%.1f / 100)', $color, $report->grade, $report->compositeScore));
+
+        // Show confidence-adjusted grade; indicate if different from base
+        if ($effectiveGrade !== $report->grade) {
+            $command->line(sprintf(
+                '  Grade:      <fg=%s;options=bold>%s</> (%.1f / 100) <fg=yellow>[base: %s (%.1f) — capped by confidence/findings]</>',
+                $color, $effectiveGrade, $effectiveScore, $report->grade, $report->compositeScore,
+            ));
+        } else {
+            $command->line(sprintf('  Grade:      <fg=%s;options=bold>%s</> (%.1f / 100)', $color, $effectiveGrade, $effectiveScore));
+        }
+
         $command->line(sprintf('  Time:       <fg=white;options=bold>%.2fms</>', $report->result->executionTimeMs));
         $command->line(sprintf(
             '  Findings:   <fg=red>%d critical</>  <fg=yellow>%d warnings</>  <fg=green>%d optimizations</>  <fg=gray>%d info</>',
@@ -227,6 +358,10 @@ final class ReportRenderer
         $command->line(sprintf('  Max Loops:             <fg=white;options=bold>%s</>', number_format($metrics['max_loops'] ?? 0)));
         $command->line(sprintf('  Max Cost:              <fg=white;options=bold>%s</>', number_format($metrics['max_cost'] ?? 0, 2)));
         $command->line(sprintf('  Selectivity:           <fg=white;options=bold>%.1fx</>', $metrics['selectivity_ratio'] ?? 0));
+        $command->line(sprintf('  Access Type:           <fg=white;options=bold>%s</>', strtoupper($metrics['mysql_access_type'] ?? 'N/A')));
+        if ($metrics['is_intentional_scan'] ?? false) {
+            $command->line('  Scan Class:            <fg=green;options=bold>Intentional Full Dataset Retrieval</>');
+        }
         $command->line(sprintf('  Complexity:            <fg=white;options=bold>%s</>', $metrics['complexity_label'] ?? 'N/A'));
         $command->line('  '.str_repeat('-', 70));
         $command->newLine();
@@ -268,6 +403,10 @@ final class ReportRenderer
 
         if ($scores['context_override'] ?? false) {
             $command->line('  Context Override:      <fg=green>Applied (LIMIT+covering+no filesort+fast)</>');
+        }
+
+        if ($scores['dataset_dampened'] ?? false) {
+            $command->line('  <fg=cyan>Score dampened: large unbounded result set</>');
         }
 
         $command->line('  Component Breakdown:');
@@ -380,23 +519,51 @@ final class ReportRenderer
             default => 'white',
         };
 
+        $complexityValue = $scalability['complexity'] ?? '';
+        $isStable = $complexityValue === 'O(1)';
+
         $command->line('<fg=yellow>  Scalability Estimation:</>');
         $command->line('  '.str_repeat('-', 70));
-        $command->line(sprintf('  Current Rows:          %s', number_format($scalability['current_rows'] ?? 0)));
+        $command->line(sprintf('  Table Size (rows):     %s', number_format($scalability['current_rows'] ?? 0)));
         $command->line(sprintf('  Risk:                  <fg=%s;options=bold>%s</>', $riskColor, $risk));
+
+        if ($isStable) {
+            $command->line('  Scalability:           <fg=green;options=bold>Stable</> (constant time at any table size)');
+        }
+
+        if ($scalability['is_intentional_scan'] ?? false) {
+            $command->line('  Classification:        <fg=green;options=bold>EXPECTED_LINEAR_SCALING</>');
+            $command->line('  Note:                  <fg=cyan>Full dataset retrieval — O(n) is the optimal plan.</>');
+        }
+
+        $linearSubtype = $scalability['linear_subtype'] ?? null;
+        if ($linearSubtype !== null) {
+            $subtypeLabels = [
+                'EXPORT_LINEAR' => 'Full dataset export',
+                'ANALYTICAL_LINEAR' => 'Aggregation/grouping scan',
+                'INDEX_MISSED_LINEAR' => 'Missing index — table scan where index would help',
+                'PATHOLOGICAL_LINEAR' => 'Complex linear scan',
+            ];
+            $subtypeColor = $linearSubtype === 'INDEX_MISSED_LINEAR' ? 'red' : 'cyan';
+            $command->line(sprintf('  Linear Subtype:        <fg=%s>%s</>', $subtypeColor, $subtypeLabels[$linearSubtype] ?? $linearSubtype));
+        }
 
         $projections = $scalability['projections'] ?? [];
         foreach ($projections as $p) {
+            $confidenceNote = ($p['confidence'] ?? 'high') !== 'high'
+                ? sprintf(' — %s confidence', $p['confidence'])
+                : '';
             $command->line(sprintf(
-                '    at %sM:  %s  (projected %.1fms)',
+                '    at %sM:  %s  (projected %.1fms%s)',
                 number_format(($p['target_rows'] ?? 0) / 1_000_000),
                 $p['label'] ?? '',
                 $p['projected_time_ms'] ?? 0,
+                $confidenceNote,
             ));
         }
 
         $limitSensitivity = $scalability['limit_sensitivity'] ?? [];
-        if (! empty($limitSensitivity)) {
+        if (! empty($limitSensitivity) && ! $isStable) {
             $command->line('  LIMIT Sensitivity:');
             foreach ($limitSensitivity as $limit => $data) {
                 $command->line(sprintf(
@@ -452,6 +619,329 @@ final class ReportRenderer
     {
         $icon = $value ? '<fg=red>YES (bad)</>' : '<fg=green>NO (good)</>';
         $command->line(sprintf('  %-22s %s', $label.':', $icon));
+    }
+
+    private function renderCardinalityDrift(Command $command, array $drift): void
+    {
+        $command->line('<fg=yellow>  Cardinality Drift:</>');
+        $command->line('  '.str_repeat('-', 70));
+        $command->line(sprintf('  Composite Drift Score: <fg=white;options=bold>%.2f</>', $drift['composite_drift_score'] ?? 0));
+
+        $perTable = $drift['per_table'] ?? [];
+        if (! empty($perTable)) {
+            $command->line('  Per-Table Analysis:');
+            foreach ($perTable as $table => $data) {
+                $severity = $data['severity'] ?? 'info';
+                $color = match ($severity) {
+                    'critical' => 'red',
+                    'warning' => 'yellow',
+                    default => 'gray',
+                };
+                $command->line(sprintf(
+                    '    <fg=%s>%-20s</> drift: %.0f%%  direction: %s  (est: %s, actual: %s)',
+                    $color,
+                    $table,
+                    ($data['drift_ratio'] ?? 0) * 100,
+                    $data['drift_direction'] ?? 'unknown',
+                    number_format($data['estimated_rows'] ?? 0),
+                    number_format($data['actual_rows'] ?? 0),
+                ));
+            }
+        }
+
+        $needsAnalyze = $drift['tables_needing_analyze'] ?? [];
+        if (! empty($needsAnalyze)) {
+            $command->line(sprintf('  Tables needing ANALYZE: <fg=yellow>%s</>', implode(', ', $needsAnalyze)));
+        }
+
+        $command->line('  '.str_repeat('-', 70));
+        $command->newLine();
+    }
+
+    private function renderConfidence(Command $command, array $confidence): void
+    {
+        $overall = $confidence['overall'] ?? 0;
+        $label = $confidence['label'] ?? 'unknown';
+        $color = match ($label) {
+            'high' => 'green',
+            'moderate' => 'yellow',
+            'low' => 'red',
+            default => 'gray',
+        };
+
+        $barLength = (int) round($overall * 20);
+        $bar = str_repeat('|', $barLength).str_repeat('.', 20 - $barLength);
+
+        $command->line('<fg=yellow>  Analysis Confidence:</>');
+        $command->line('  '.str_repeat('-', 70));
+        $command->line(sprintf('  Score: <fg=%s;options=bold>%.0f%%</> [%s] %s', $color, $overall * 100, $bar, strtoupper($label)));
+
+        $factors = $confidence['factors'] ?? [];
+        foreach ($factors as $factor) {
+            $command->line(sprintf(
+                '    %-22s %.0f%% (weight: %.0f%%) — %s',
+                str_replace('_', ' ', $factor['name'] ?? ''),
+                ($factor['score'] ?? 0) * 100,
+                ($factor['weight'] ?? 0) * 100,
+                $factor['note'] ?? '',
+            ));
+        }
+
+        $command->line('  '.str_repeat('-', 70));
+        $command->newLine();
+    }
+
+    private function renderMemoryPressure(Command $command, array $pressure): void
+    {
+        $risk = $pressure['memory_risk'] ?? 'low';
+        $riskColor = match ($risk) {
+            'high' => 'red',
+            'moderate' => 'yellow',
+            default => 'green',
+        };
+
+        $command->line('<fg=yellow>  Memory Pressure:</>');
+        $command->line('  '.str_repeat('-', 70));
+        $command->line(sprintf('  Risk: <fg=%s;options=bold>%s</>', $riskColor, strtoupper($risk)));
+        $command->line(sprintf('  Total Estimated: %s', $this->formatMemoryBytes($pressure['total_estimated_bytes'] ?? 0)));
+        $command->line(sprintf('  Buffer Pool Pressure: %.1f%%', ($pressure['buffer_pool_pressure'] ?? 0) * 100));
+
+        $categories = $pressure['categories'] ?? [];
+        if (! empty($categories)) {
+            $command->line('  Breakdown:');
+            foreach ($categories as $name => $bytes) {
+                $label = str_replace('_', ' ', $name);
+                $command->line(sprintf('    %-30s %s', ucfirst($label), $this->formatMemoryBytes($bytes)));
+            }
+        }
+
+        $components = $pressure['components'] ?? [];
+        $activeComponents = array_filter($components, fn ($bytes) => $bytes > 0);
+        if (! empty($activeComponents)) {
+            $command->line('  Detail:');
+            foreach ($activeComponents as $name => $bytes) {
+                $command->line(sprintf('    %-30s %s', str_replace('_', ' ', $name), $this->formatMemoryBytes($bytes)));
+            }
+        }
+
+        // Network pressure classification
+        $networkPressure = $pressure['network_pressure'] ?? 'LOW';
+        if ($networkPressure !== 'LOW') {
+            $npColor = match ($networkPressure) {
+                'CRITICAL' => 'red',
+                'HIGH' => 'red',
+                'MODERATE' => 'yellow',
+                default => 'green',
+            };
+            $command->line(sprintf('  Network Pressure:     <fg=%s;options=bold>%s</>', $npColor, $networkPressure));
+        }
+
+        // Network transfer highlight
+        $networkTransfer = $categories['network_transfer_estimate'] ?? 0;
+        if ($networkTransfer > 52428800) { // > 50MB
+            $command->line(sprintf('  <fg=yellow>Network Transfer:        %s (consider streaming/pagination)</>', $this->formatMemoryBytes($networkTransfer)));
+        }
+
+        // Concurrency-adjusted totals
+        $concurrencyAdjusted = $pressure['concurrency_adjusted'] ?? null;
+        if ($concurrencyAdjusted !== null && ($concurrencyAdjusted['concurrent_sessions'] ?? 1) > 1) {
+            $sessions = $concurrencyAdjusted['concurrent_sessions'];
+            $command->line(sprintf(
+                '  Concurrency (%dx):     %s execution memory, %s network transfer',
+                $sessions,
+                $this->formatMemoryBytes($concurrencyAdjusted['concurrent_execution_memory'] ?? 0),
+                $this->formatMemoryBytes($concurrencyAdjusted['concurrent_network_transfer'] ?? 0),
+            ));
+        }
+
+        $command->line('  '.str_repeat('-', 70));
+        $command->newLine();
+    }
+
+    private function renderConcurrencyRisk(Command $command, array $concurrency): void
+    {
+        $lockScope = $concurrency['lock_scope'] ?? 'unknown';
+
+        $command->line('<fg=yellow>  Concurrency Risk:</>');
+        $command->line('  '.str_repeat('-', 70));
+
+        if ($lockScope === 'none') {
+            $command->line('  Lock Scope:      <fg=green;options=bold>NONE</> (read-only, MVCC consistent read)');
+            $command->line('  Deadlock Risk:   <fg=green;options=bold>NONE</>');
+            $command->line('  Contention:      0.00');
+        } else {
+            $riskLabel = $concurrency['deadlock_risk_label'] ?? 'low';
+            $riskColor = match ($riskLabel) {
+                'high' => 'red',
+                'moderate' => 'yellow',
+                default => 'green',
+            };
+
+            $command->line(sprintf('  Lock Scope:      <fg=white;options=bold>%s</>', strtoupper($lockScope)));
+            $command->line(sprintf('  Deadlock Risk:   <fg=%s;options=bold>%s</> (%.1f)', $riskColor, strtoupper($riskLabel), $concurrency['deadlock_risk'] ?? 0));
+            $command->line(sprintf('  Contention:      %.2f', $concurrency['contention_score'] ?? 0));
+        }
+
+        if (! empty($concurrency['isolation_impact'])) {
+            $command->line(sprintf('  Isolation:       %s', $concurrency['isolation_impact']));
+        }
+
+        $command->line('  '.str_repeat('-', 70));
+        $command->newLine();
+    }
+
+    private function renderRegression(Command $command, array $regression): void
+    {
+        if (! ($regression['has_baseline'] ?? false)) {
+            $command->line('<fg=yellow>  Regression Analysis:</>');
+            $command->line('  '.str_repeat('-', 70));
+            $command->line('  <fg=gray>No baseline data yet. This query will be tracked for future comparisons.</>');
+            $command->line('  '.str_repeat('-', 70));
+            $command->newLine();
+
+            return;
+        }
+
+        $trend = $regression['trend'] ?? 'stable';
+        $trendColor = match ($trend) {
+            'degrading' => 'red',
+            'improving' => 'green',
+            default => 'yellow',
+        };
+
+        $command->line('<fg=yellow>  Regression Analysis:</>');
+        $command->line('  '.str_repeat('-', 70));
+        $command->line(sprintf('  Baseline Count:  %d snapshots', $regression['baseline_count'] ?? 0));
+        $command->line(sprintf('  Trend:           <fg=%s;options=bold>%s</>', $trendColor, strtoupper($trend)));
+
+        $regressions = $regression['regressions'] ?? [];
+        if (! empty($regressions)) {
+            $command->line('  Regressions:');
+            foreach ($regressions as $r) {
+                $command->line(sprintf(
+                    '    <fg=red>[%s]</> %s: %.1f -> %.1f (%+.0f%%)',
+                    strtoupper($r['severity'] ?? 'warning'),
+                    $r['metric'] ?? '',
+                    $r['baseline_value'] ?? 0,
+                    $r['current_value'] ?? 0,
+                    $r['change_pct'] ?? 0,
+                ));
+            }
+        }
+
+        $improvements = $regression['improvements'] ?? [];
+        if (! empty($improvements)) {
+            $command->line('  Improvements:');
+            foreach ($improvements as $imp) {
+                $command->line(sprintf(
+                    '    <fg=green>[+]</> %s: %.1f -> %.1f (%+.0f%%)',
+                    $imp['metric'] ?? '',
+                    $imp['baseline_value'] ?? 0,
+                    $imp['current_value'] ?? 0,
+                    $imp['change_pct'] ?? 0,
+                ));
+            }
+        }
+
+        $command->line('  '.str_repeat('-', 70));
+        $command->newLine();
+    }
+
+    private function renderHypotheticalIndexes(Command $command, array $hypothetical): void
+    {
+        if (! ($hypothetical['enabled'] ?? false)) {
+            return;
+        }
+
+        $simulations = $hypothetical['simulations'] ?? [];
+        if (empty($simulations)) {
+            return;
+        }
+
+        $command->line('<fg=yellow>  Hypothetical Index Simulation:</>');
+        $command->line('  '.str_repeat('-', 70));
+
+        foreach ($simulations as $i => $sim) {
+            $improvement = $sim['improvement'] ?? 'none';
+            $color = match ($improvement) {
+                'significant' => 'green',
+                'moderate' => 'yellow',
+                'marginal' => 'gray',
+                default => 'red',
+            };
+            $validated = ($sim['validated'] ?? false) ? 'YES' : 'NO';
+
+            $command->line(sprintf('  %d. %s', $i + 1, $sim['index_ddl'] ?? ''));
+            $command->line(sprintf(
+                '     Before: %s (%s rows)  ->  After: %s (%s rows)',
+                $sim['before']['access_type'] ?? '?',
+                number_format($sim['before']['rows'] ?? 0),
+                $sim['after']['access_type'] ?? '?',
+                number_format($sim['after']['rows'] ?? 0),
+            ));
+            $command->line(sprintf(
+                '     Improvement: <fg=%s;options=bold>%s</>  Validated: %s',
+                $color,
+                strtoupper($improvement),
+                $validated,
+            ));
+            if (! empty($sim['notes'])) {
+                $command->line(sprintf('     Notes: %s', $sim['notes']));
+            }
+        }
+
+        $best = $hypothetical['best_recommendation'] ?? null;
+        if ($best !== null) {
+            $command->line(sprintf('  Best: <fg=green;options=bold>%s</>', $best));
+        }
+
+        $command->line('  '.str_repeat('-', 70));
+        $command->newLine();
+    }
+
+    private function renderWorkload(Command $command, array $workload): void
+    {
+        $frequency = $workload['query_frequency'] ?? 0;
+        $isFrequent = $workload['is_frequent'] ?? false;
+        $patterns = $workload['patterns'] ?? [];
+
+        $command->line('<fg=yellow>  Workload Analysis:</>');
+        $command->line('  '.str_repeat('-', 70));
+        $command->line(sprintf('  Query Frequency:       %d snapshots%s', $frequency, $isFrequent ? ' <fg=yellow>(frequent)</>' : ''));
+
+        if (empty($patterns)) {
+            $command->line('  Patterns:              <fg=green>None detected</>');
+        } else {
+            foreach ($patterns as $pattern) {
+                $type = $pattern['type'] ?? 'unknown';
+                $severity = $pattern['severity'] ?? 'info';
+                $occurrences = $pattern['occurrences'] ?? 0;
+                $color = match ($severity) {
+                    'critical' => 'red',
+                    'warning' => 'yellow',
+                    default => 'gray',
+                };
+                $command->line(sprintf('  <fg=%s>[%s]</> %s (%d occurrences)', $color, strtoupper($severity), $type, $occurrences));
+            }
+        }
+
+        $command->line('  '.str_repeat('-', 70));
+        $command->newLine();
+    }
+
+    private function formatMemoryBytes(int $bytes): string
+    {
+        if ($bytes >= 1073741824) {
+            return sprintf('%.1f GB', $bytes / 1073741824);
+        }
+        if ($bytes >= 1048576) {
+            return sprintf('%.1f MB', $bytes / 1048576);
+        }
+        if ($bytes >= 1024) {
+            return sprintf('%.1f KB', $bytes / 1024);
+        }
+
+        return sprintf('%d B', $bytes);
     }
 
     private function formatSql(string $sql): string
