@@ -8,6 +8,22 @@ final class NoIndexRule extends BaseRule
 {
     public function evaluate(array $metrics): ?array
     {
+        // Zero-row const: index WAS used (const table optimization)
+        if ($metrics['is_zero_row_const'] ?? false) {
+            return null;
+        }
+
+        // Intentional full scan: no predicates to index
+        if ($metrics['is_intentional_scan'] ?? false) {
+            return null;
+        }
+
+        // Const/eq_ref access: index used
+        $accessType = $metrics['primary_access_type'] ?? null;
+        if (in_array($accessType, ['zero_row_const', 'const_row', 'single_row_lookup'], true)) {
+            return null;
+        }
+
         $isIndexBacked = $metrics['is_index_backed'] ?? false;
 
         if ($isIndexBacked) {
