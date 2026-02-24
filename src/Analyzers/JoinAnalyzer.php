@@ -78,6 +78,31 @@ final class JoinAnalyzer
         }
         $joinAnalysis['lookup_efficiency'] = $lookupEfficiency;
 
+        $joinAnalysis['effective_fanout'] = $this->calculateEffectiveFanout($plan);
+        $joinAnalysis['explosion_factor'] = $this->calculateExplosionFactor($joinAnalysis['effective_fanout'], $metrics);
+        $joinAnalysis['multiplicative_risk'] = $this->classifyMultiplicativeRisk($joinAnalysis['explosion_factor']);
+        $joinAnalysis['per_step'] = $this->extractPerStepFanout($plan, $metrics);
+
+        if (in_array($joinAnalysis['multiplicative_risk'], ['multiplicative_risk', 'exponential_explosion'], true)) {
+            $severity = $joinAnalysis['multiplicative_risk'] === 'exponential_explosion' ? Severity::Critical : Severity::Warning;
+            $findings[] = new Finding(
+                severity: $severity,
+                category: 'join_analysis',
+                title: sprintf('Multiplicative join risk: %s (explosion factor: %.1fx)', $joinAnalysis['multiplicative_risk'], $joinAnalysis['explosion_factor']),
+                description: sprintf(
+                    'The join produces an effective fanout of %.0f rows with an explosion factor of %.1fx relative to the driving table. This indicates potentially unbounded row multiplication.',
+                    $joinAnalysis['effective_fanout'],
+                    $joinAnalysis['explosion_factor']
+                ),
+                recommendation: 'Add more selective join conditions, add indexes on inner join tables, or pre-filter with subqueries.',
+                metadata: [
+                    'effective_fanout' => $joinAnalysis['effective_fanout'],
+                    'explosion_factor' => $joinAnalysis['explosion_factor'],
+                    'risk' => $joinAnalysis['multiplicative_risk'],
+                ],
+            );
+        }
+
         return ['join_analysis' => $joinAnalysis, 'findings' => $findings];
     }
 
@@ -106,6 +131,108 @@ final class JoinAnalyzer
         }
 
         return $types;
+    }
+
+    /**
+     * Calculate the effective fanout as the product of all per-step fanouts.
+     *
+     * Parses the plan for `(actual time=... rows=N loops=M)` patterns,
+     * computes `rows * loops` per step, and returns the product.
+     */
+    private function calculateEffectiveFanout(string $plan): float
+    {
+        $pattern = '/\(actual\s+time=[\d.]+\.\.[\d.]+\s+rows=(\d+)\s+loops=(\d+)\)/i';
+
+        if (! preg_match_all($pattern, $plan, $matches, PREG_SET_ORDER)) {
+            return 1.0;
+        }
+
+        $product = 1.0;
+        foreach ($matches as $match) {
+            $rows = (int) $match[1];
+            $loops = (int) $match[2];
+            $stepFanout = (float) ($rows * $loops);
+            if ($stepFanout > 0) {
+                $product *= $stepFanout;
+            }
+        }
+
+        return $product;
+    }
+
+    /**
+     * Calculate the explosion factor: effective_fanout / driving_table_rows.
+     *
+     * The driving table is the first entry in `per_table_estimates`,
+     * or falls back to `rows_returned`.
+     *
+     * @param  array<string, mixed>  $metrics
+     */
+    private function calculateExplosionFactor(float $effectiveFanout, array $metrics): float
+    {
+        $drivingRows = 1;
+
+        $perTableEstimates = $metrics['per_table_estimates'] ?? [];
+        if (is_array($perTableEstimates) && ! empty($perTableEstimates)) {
+            $first = reset($perTableEstimates);
+            if (is_array($first)) {
+                $drivingRows = ($first['actual_rows'] ?? 1) * ($first['loops'] ?? 1);
+            }
+        }
+
+        if ($drivingRows < 1) {
+            $drivingRows = max((int) ($metrics['rows_returned'] ?? 1), 1);
+        }
+
+        return $effectiveFanout / (float) max($drivingRows, 1);
+    }
+
+    /**
+     * Classify multiplicative risk based on the explosion factor.
+     */
+    private function classifyMultiplicativeRisk(float $explosionFactor): string
+    {
+        if ($explosionFactor > 1000) {
+            return 'exponential_explosion';
+        }
+        if ($explosionFactor > 100) {
+            return 'multiplicative_risk';
+        }
+        if ($explosionFactor > 10) {
+            return 'linear_amplification';
+        }
+
+        return 'contained';
+    }
+
+    /**
+     * Extract per-step fanout data from the plan.
+     *
+     * Parses per-table step data and returns an array of entries with
+     * table name, step fanout, rows, and loops.
+     *
+     * @param  array<string, mixed>  $metrics
+     * @return array<int, array{table: string, step_fanout: float, rows: int, loops: int}>
+     */
+    private function extractPerStepFanout(string $plan, array $metrics): array
+    {
+        $pattern = '/(?:scan|lookup|search)\s+on\s+(\w+).*?\(actual\s+time=[\d.]+\.\.[\d.]+\s+rows=(\d+)\s+loops=(\d+)\)/is';
+
+        $steps = [];
+        if (preg_match_all($pattern, $plan, $matches, PREG_SET_ORDER)) {
+            foreach ($matches as $match) {
+                $rows = (int) $match[2];
+                $loops = (int) $match[3];
+                $steps[] = [
+                    'table' => $match[1],
+                    'step_fanout' => (float) ($rows * $loops),
+                    'rows' => $rows,
+                    'loops' => $loops,
+                ];
+            }
+        }
+
+        return $steps;
     }
 
     /**

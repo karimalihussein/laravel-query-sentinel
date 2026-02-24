@@ -24,7 +24,7 @@ final class PlanStabilityAnalyzer
      * @param  array<int, array<string, mixed>>  $explainRows  From EXPLAIN tabular output
      * @return array{stability: array<string, mixed>, findings: Finding[]}
      */
-    public function analyze(string $rawSql, string $plan, array $metrics, array $explainRows, ?string $connectionName = null): array
+    public function analyze(string $rawSql, string $plan, array $metrics, array $explainRows, ?string $connectionName = null, ?array $cardinalityDrift = null): array
     {
         $findings = [];
         $stability = [];
@@ -68,6 +68,36 @@ final class PlanStabilityAnalyzer
                 description: $issue['description'],
                 recommendation: sprintf('ANALYZE TABLE `%s`;', $issue['table']),
                 metadata: $issue,
+            );
+        }
+
+        // Volatility scoring (Phase 8)
+        $volatilityScore = $this->calculateVolatilityScore($flipRisk, $hints, $cardinalityDrift);
+        $volatilityLabel = $this->classifyVolatility($volatilityScore);
+        $stability['volatility_score'] = $volatilityScore;
+        $stability['volatility_label'] = $volatilityLabel;
+
+        // Drift contributors
+        $driftContributors = $this->extractDriftContributors($cardinalityDrift);
+        $stability['drift_contributors'] = $driftContributors;
+
+        // Generate volatility findings
+        if ($volatilityLabel === 'volatile') {
+            $findings[] = new Finding(
+                severity: Severity::Warning,
+                category: 'plan_stability',
+                title: sprintf('High plan volatility: %d/100', $volatilityScore),
+                description: 'The execution plan is volatile due to estimation deviations and stale statistics. The optimizer may choose different plans on repeated execution.',
+                recommendation: 'Run ANALYZE TABLE on affected tables and consider using optimizer hints to stabilize the plan.',
+                metadata: ['volatility_score' => $volatilityScore, 'drift_contributors' => $driftContributors],
+            );
+        } elseif ($volatilityLabel === 'moderate') {
+            $findings[] = new Finding(
+                severity: Severity::Optimization,
+                category: 'plan_stability',
+                title: sprintf('Moderate plan volatility: %d/100', $volatilityScore),
+                description: 'The execution plan has moderate volatility. Monitor for plan changes during data growth.',
+                metadata: ['volatility_score' => $volatilityScore],
             );
         }
 
@@ -214,5 +244,62 @@ final class PlanStabilityAnalyzer
                 return [];
             }
         });
+    }
+
+    /**
+     * Calculate volatility score (0-100) from plan deviations, hints, and drift.
+     */
+    private function calculateVolatilityScore(array $flipRisk, array $hints, ?array $cardinalityDrift): int
+    {
+        $volatility = 0;
+
+        // Deviations contribute to volatility
+        foreach ($flipRisk['deviations'] as $deviation) {
+            $volatility += (int) min($deviation['factor'] * 5, 25);
+        }
+
+        // Optimizer hints stabilize the plan
+        if (!empty($hints)) {
+            $volatility -= 20;
+        }
+
+        // Cardinality drift contributes
+        $compositeDrift = $cardinalityDrift['composite_drift_score'] ?? 0.0;
+        $volatility += (int) round($compositeDrift * 30);
+
+        return max(0, min(100, $volatility));
+    }
+
+    /**
+     * Classify volatility level.
+     */
+    private function classifyVolatility(int $score): string
+    {
+        return match (true) {
+            $score >= 60 => 'volatile',
+            $score >= 30 => 'moderate',
+            default => 'stable',
+        };
+    }
+
+    /**
+     * Extract tables contributing to drift from Phase 1 data.
+     *
+     * @return string[]
+     */
+    private function extractDriftContributors(?array $cardinalityDrift): array
+    {
+        if ($cardinalityDrift === null) {
+            return [];
+        }
+
+        $contributors = [];
+        foreach ($cardinalityDrift['per_table'] ?? [] as $table => $data) {
+            if (($data['drift_ratio'] ?? 0) > 0.5) {
+                $contributors[] = $table;
+            }
+        }
+
+        return $contributors;
     }
 }
