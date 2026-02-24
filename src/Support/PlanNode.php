@@ -28,6 +28,12 @@ final class PlanNode
     /**
      * Whether this node represents an I/O operation (reads from storage/index).
      */
+    /**
+     * Whether this node represents an I/O operation (reads from storage/index).
+     *
+     * Note: zero_row_const is NOT I/O — the optimizer resolved it at plan time.
+     * const_row IS I/O — it reads exactly one row from a const table.
+     */
     public function isIoOperation(): bool
     {
         if ($this->accessType === null) {
@@ -42,6 +48,19 @@ final class PlanNode
             'single_row_lookup',
             'index_scan',
             'fulltext_index',
+            'const_row',
+        ], true);
+    }
+
+    /**
+     * Whether this node represents a const-level access (O(1)).
+     */
+    public function isConstAccess(): bool
+    {
+        return in_array($this->accessType, [
+            'zero_row_const',
+            'const_row',
+            'single_row_lookup',
         ], true);
     }
 
