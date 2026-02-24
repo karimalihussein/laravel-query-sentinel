@@ -12,6 +12,11 @@ final class FullTableScanRule extends BaseRule
             return null;
         }
 
+        // Intentional full scan: no filtering/joining/grouping/ordering — scan is expected
+        if ($metrics['is_intentional_scan'] ?? false) {
+            return null;
+        }
+
         $rowsExamined = $metrics['rows_examined'] ?? 0;
 
         return $this->finding(
