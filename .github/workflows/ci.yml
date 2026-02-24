@@ -1,5 +1,6 @@
 name: CI
 
+# Run on push/PR when PHP/config changes to avoid unnecessary builds
 on:
   push:
     paths:
@@ -11,26 +12,139 @@ on:
     paths:
       - '**.php'
 
+# Cancel outdated runs for the same branch
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  tests:
+  # Run code-style and static-analysis FIRST to fail fast on lint/type errors
+  # and save GitHub Actions minutes when a simple fix would block all tests
+  code-style:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: dom, mbstring
+          coverage: none
+
+      # Composer cache dir (not vendor): safe across PHP/Laravel versions, avoids corrupted deps
+      - name: Get Composer cache directory
+        id: composer-cache
+        run: echo "dir=$(composer config cache-files-dir)" >> $GITHUB_OUTPUT
+
+      - name: Cache Composer packages
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.composer-cache.outputs.dir }}
+          key: composer-${{ hashFiles('composer.lock') }}
+
+      - name: Install dependencies
+        run: composer install --prefer-dist --no-interaction --no-progress
+
+      - name: Run Pint
+        run: vendor/bin/pint --test
+
+  static-analysis:
     runs-on: ubuntu-latest
     timeout-minutes: 10
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: dom, curl, mbstring, zip, pdo, pdo_mysql, pdo_pgsql
+          coverage: none
+
+      - name: Get Composer cache directory
+        id: composer-cache
+        run: echo "dir=$(composer config cache-files-dir)" >> $GITHUB_OUTPUT
+
+      - name: Cache Composer packages
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.composer-cache.outputs.dir }}
+          key: composer-${{ hashFiles('composer.lock') }}
+
+      - name: Install dependencies
+        run: composer install --prefer-dist --no-interaction --no-progress
+
+      - name: Run PHPStan
+        run: vendor/bin/phpstan analyse --no-progress --memory-limit=1G
+
+  # Test suite: PHP × Laravel × MySQL/PostgreSQL matrix
+  # Depends on style/analysis so we don't waste matrix minutes on lint errors
+  tests:
+    runs-on: ubuntu-latest
+    needs: [code-style, static-analysis]
+    timeout-minutes: 15
+
     strategy:
-      fail-fast: true
+      fail-fast: false
       matrix:
         php: ['8.2', '8.3']
         laravel: ['10.*', '11.*']
+        database: [mysql, pgsql]
         include:
           - laravel: '10.*'
             testbench: '8.*'
           - laravel: '11.*'
             testbench: '9.*'
 
-    name: PHP ${{ matrix.php }} - Laravel ${{ matrix.laravel }}
+    name: PHP ${{ matrix.php }} - Laravel ${{ matrix.laravel }} - ${{ matrix.database }}
+
+    # Single postgres service definition (de-duplicated)
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: testing
+          MYSQL_USER: testing
+          MYSQL_PASSWORD: testing
+        ports:
+          - 3306:3306
+        # Health check must use same credentials as MYSQL_ROOT_PASSWORD for root user
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -u root -proot"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=10
+
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: testing
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=10
+
+    env:
+      # Explicit 127.0.0.1 for consistency (avoids IPv6 vs IPv4 issues)
+      DB_HOST: 127.0.0.1
+      DB_CONNECTION: ${{ matrix.database }}
+      DB_PORT: ${{ matrix.database == 'mysql' && '3306' || '5432' }}
+      DB_DATABASE: testing
+      DB_USERNAME: ${{ matrix.database == 'mysql' && 'root' || 'postgres' }}
+      DB_PASSWORD: ${{ matrix.database == 'mysql' && 'root' || 'postgres' }}
+      QUERY_SENTINEL_DRIVER: ${{ matrix.database }}
 
     steps:
       - name: Checkout code
@@ -40,45 +154,52 @@ jobs:
         uses: shivammathur/setup-php@v2
         with:
           php-version: ${{ matrix.php }}
-          extensions: dom, curl, mbstring, zip, pdo, sqlite, pdo_sqlite
-          coverage: none
+          extensions: dom, curl, mbstring, zip, pdo, pdo_mysql, pdo_pgsql, sqlite, pdo_sqlite
+          # PCOV is much faster than Xdebug for coverage; required for --coverage-clover
+          coverage: pcov
+          tools: none
+
+      - name: Validate composer.json
+        run: composer validate --strict --no-check-publish
+
+      # Cache Composer package cache (not vendor): safer across PHP/Laravel matrix combinations
+      # Vendor differs per matrix cell; composer cache dir holds raw packages and is reusable
+      - name: Get Composer cache directory
+        id: composer-cache
+        run: echo "dir=$(composer config cache-files-dir)" >> $GITHUB_OUTPUT
+
+      - name: Cache Composer packages
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.composer-cache.outputs.dir }}
+          key: composer-${{ hashFiles('composer.lock') }}-${{ matrix.php }}-${{ matrix.laravel }}
+          restore-keys: |
+            composer-${{ matrix.php }}-${{ matrix.laravel }}-
 
       - name: Install dependencies
         run: |
           composer require "laravel/framework:${{ matrix.laravel }}" "orchestra/testbench:${{ matrix.testbench }}" --no-interaction --no-update
-          composer update --prefer-stable --prefer-dist --no-interaction
+          composer update --prefer-stable --prefer-dist --no-interaction --no-progress
+
+      # Dump DB version and connection status for debugging driver-specific issues
+      # Uses PHP/PDO (no mysql-client/psql needed on runner)
+      - name: Verify database connection
+        run: |
+          echo "::group::Database version and connection"
+          php -r "
+          \$db = '${{ matrix.database }}';
+          \$dsn = \$db === 'mysql'
+            ? 'mysql:host=127.0.0.1;port=3306;dbname=testing'
+            : 'pgsql:host=127.0.0.1;port=5432;dbname=testing';
+          \$user = \$db === 'mysql' ? 'root' : 'postgres';
+          \$pass = \$db === 'mysql' ? 'root' : 'postgres';
+          \$pdo = new PDO(\$dsn, \$user, \$pass);
+          \$version = \$pdo->query(\$db === 'mysql' ? 'SELECT VERSION()' : 'SELECT version()')->fetchColumn();
+          echo \"Driver: \$db\\n\";
+          echo \"Version: \$version\\n\";
+          echo \"Connected: OK\\n\";
+          "
+          echo "::endgroup::"
 
       - name: Execute tests
-        run: vendor/bin/phpunit
-
-  code-style:
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: shivammathur/setup-php@v2
-        with:
-          php-version: '8.3'
-          coverage: none
-
-      - run: composer install --no-interaction
-
-      - run: vendor/bin/pint --test
-
-  static-analysis:
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: shivammathur/setup-php@v2
-        with:
-          php-version: '8.3'
-          coverage: none
-
-      - run: composer install --no-interaction
-
-      - run: vendor/bin/phpstan analyse --no-progress
+        run: vendor/bin/phpunit --coverage-clover=coverage/clover.xml
