@@ -44,6 +44,7 @@ final class QueryDiagnosticsServiceProvider extends ServiceProvider
         $this->mergeConfigFrom(__DIR__.'/../config/query-diagnostics.php', 'query-diagnostics');
 
         $this->registerDriver();
+        $this->registerSchemaIntrospector();
         $this->registerParser();
         $this->registerScoringEngine();
         $this->registerRuleRegistry();
@@ -73,12 +74,28 @@ final class QueryDiagnosticsServiceProvider extends ServiceProvider
     private function registerDriver(): void
     {
         $this->app->singleton(DriverInterface::class, function ($app) {
-            $driver = $app['config']->get('query-diagnostics.driver', 'mysql');
+            $driver = $app['config']->get('query-diagnostics.driver')
+                ?? $app['config']->get('database.default');
             $connection = $app['config']->get('query-diagnostics.connection');
 
             return match ($driver) {
                 'pgsql', 'postgres' => new PostgresDriver($connection),
+                'sqlite' => new \QuerySentinel\Drivers\SqliteDriver($connection),
                 default => new MySqlDriver($connection),
+            };
+        });
+    }
+
+    private function registerSchemaIntrospector(): void
+    {
+        $this->app->singleton(\QuerySentinel\Contracts\SchemaIntrospector::class, function ($app) {
+            $driver = $app['config']->get('query-diagnostics.driver') ?? $app['config']->get('database.default');
+            $connection = $app['config']->get('query-diagnostics.connection');
+
+            return match ($driver) {
+                'pgsql', 'postgres' => new \QuerySentinel\Support\SchemaIntrospectors\PostgresSchemaIntrospector,
+                'sqlite' => new \QuerySentinel\Support\SchemaIntrospectors\SqliteSchemaIntrospector,
+                default => new \QuerySentinel\Support\SchemaIntrospectors\MySqlSchemaIntrospector,
             };
         });
     }

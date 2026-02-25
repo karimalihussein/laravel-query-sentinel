@@ -9,7 +9,6 @@ use QuerySentinel\Contracts\PlanParserInterface;
 use QuerySentinel\Contracts\RuleRegistryInterface;
 use QuerySentinel\Contracts\ScoringEngineInterface;
 use QuerySentinel\Diagnostics\QueryDiagnostics;
-use QuerySentinel\Drivers\MySqlDriver;
 use QuerySentinel\Parsers\ExplainPlanParser;
 use QuerySentinel\Rules\RuleRegistry;
 use QuerySentinel\Scoring\DefaultScoringEngine;
@@ -21,7 +20,7 @@ final class ServiceProviderTest extends TestCase
     {
         $driver = $this->app->make(DriverInterface::class);
 
-        $this->assertInstanceOf(MySqlDriver::class, $driver);
+        $this->assertInstanceOf(DriverInterface::class, $driver);
     }
 
     public function test_plan_parser_interface_is_bound(): void
@@ -65,11 +64,12 @@ final class ServiceProviderTest extends TestCase
         $this->assertArrayHasKey('ci', $config);
     }
 
-    public function test_default_driver_is_mysql(): void
+    public function test_default_driver_matches_database_default(): void
     {
+        $expected = $this->app['config']->get('query-diagnostics.driver') ?? $this->app['config']->get('database.default');
         $driver = $this->app->make(DriverInterface::class);
 
-        $this->assertSame('mysql', $driver->getName());
+        $this->assertSame($expected, $driver->getName());
     }
 
     public function test_postgres_driver_resolves_from_config(): void

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace QuerySentinel\Validation;
 
 use Illuminate\Support\Facades\DB;
+use QuerySentinel\Contracts\DriverInterface;
 use QuerySentinel\Exceptions\EngineAbortException;
 use QuerySentinel\Support\TypoIntelligence;
 use QuerySentinel\Support\ValidationFailureReport;
@@ -17,6 +18,7 @@ final class SyntaxValidator
 {
     public function __construct(
         private readonly ?string $connection = null,
+        private readonly ?DriverInterface $driver = null,
     ) {}
 
     /**
@@ -29,7 +31,12 @@ final class SyntaxValidator
         $conn = $this->connection ?? config('query-diagnostics.connection');
 
         try {
-            DB::connection($conn)->select('EXPLAIN '.$sql);
+            if ($this->driver !== null) {
+                // Use driver abstraction which knows correct EXPLAIN form.
+                $this->driver->runExplain($sql);
+            } else {
+                DB::connection($conn)->select('EXPLAIN '.$sql);
+            }
         } catch (\Throwable $e) {
             $report = $this->buildFailureReport($e, $sql);
 

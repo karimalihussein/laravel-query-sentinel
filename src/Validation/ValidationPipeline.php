@@ -19,6 +19,8 @@ final class ValidationPipeline
 {
     public function __construct(
         private readonly ?string $connection = null,
+        private readonly ?\QuerySentinel\Contracts\SchemaIntrospector $introspector = null,
+        private readonly ?\QuerySentinel\Contracts\DriverInterface $driver = null,
     ) {}
 
     /**
@@ -30,8 +32,19 @@ final class ValidationPipeline
     {
         $aliasToTable = SqlParser::extractTableAliases($sql);
 
+        $introspector = $this->introspector;
+        $driver = $this->driver;
+
+        if ($introspector === null && function_exists('app') && app()->bound(\QuerySentinel\Contracts\SchemaIntrospector::class)) {
+            $introspector = app()->make(\QuerySentinel\Contracts\SchemaIntrospector::class);
+        }
+
+        if ($driver === null && function_exists('app') && app()->bound(\QuerySentinel\Contracts\DriverInterface::class)) {
+            $driver = app()->make(\QuerySentinel\Contracts\DriverInterface::class);
+        }
+
         // 1. Table existence
-        $schemaValidator = new SchemaValidator($this->connection);
+        $schemaValidator = new SchemaValidator($introspector ?? throw new \RuntimeException('SchemaIntrospector unavailable'), $this->connection);
         $schemaValidator->validateTables($sql);
 
         // 2. Column existence
@@ -42,7 +55,7 @@ final class ValidationPipeline
         $joinValidator->validate($sql, $aliasToTable);
 
         // 4. Syntax (EXPLAIN without ANALYZE — at this point schema is valid)
-        $syntaxValidator = new SyntaxValidator($this->connection);
+        $syntaxValidator = new SyntaxValidator($this->connection, $driver);
         $syntaxValidator->validate($sql);
     }
 }
