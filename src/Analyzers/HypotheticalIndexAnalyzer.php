@@ -155,11 +155,11 @@ final class HypotheticalIndexAnalyzer
                     $afterExplain = $driver->runExplain($sql);
                     $after = $this->extractExplainSnapshot($afterExplain);
                 } catch (\Throwable $e) {
-                    $simulationError = 'EXPLAIN after index creation failed: ' . $e->getMessage();
+                    $simulationError = 'EXPLAIN after index creation failed: '.$e->getMessage();
                 }
             }
         } catch (\Throwable $e) {
-            $simulationError = 'Index creation failed: ' . $e->getMessage();
+            $simulationError = 'Index creation failed: '.$e->getMessage();
         } finally {
             // Always attempt to drop the index
             if ($dropDdl !== null) {

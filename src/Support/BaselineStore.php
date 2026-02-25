@@ -107,12 +107,12 @@ final class BaselineStore
     {
         $pruned = 0;
 
-        if (!is_dir($this->storagePath)) {
+        if (! is_dir($this->storagePath)) {
             return 0;
         }
 
         $cutoff = date('c', time() - ($maxAgeDays * 86400));
-        $files = glob($this->storagePath . '/*.json');
+        $files = glob($this->storagePath.'/*.json');
 
         if ($files === false) {
             return 0;
@@ -130,11 +130,11 @@ final class BaselineStore
             $data['snapshots'] = array_values(array_filter(
                 $data['snapshots'],
                 static function (mixed $snapshot) use ($cutoff): bool {
-                    if (!is_array($snapshot)) {
+                    if (! is_array($snapshot)) {
                         return false;
                     }
                     $timestamp = $snapshot['timestamp'] ?? null;
-                    if (!is_string($timestamp)) {
+                    if (! is_string($timestamp)) {
                         return false;
                     }
 
@@ -157,7 +157,7 @@ final class BaselineStore
 
     private function filePath(string $queryHash): string
     {
-        return $this->storagePath . '/' . $queryHash . '.json';
+        return $this->storagePath.'/'.$queryHash.'.json';
     }
 
     /**
@@ -165,7 +165,7 @@ final class BaselineStore
      */
     private function readFile(string $filePath): array
     {
-        if (!file_exists($filePath)) {
+        if (! file_exists($filePath)) {
             return ['snapshots' => []];
         }
 
@@ -178,7 +178,7 @@ final class BaselineStore
         /** @var mixed $decoded */
         $decoded = json_decode($contents, true);
 
-        if (!is_array($decoded) || !isset($decoded['snapshots']) || !is_array($decoded['snapshots'])) {
+        if (! is_array($decoded) || ! isset($decoded['snapshots']) || ! is_array($decoded['snapshots'])) {
             return ['snapshots' => []];
         }
 
@@ -188,7 +188,7 @@ final class BaselineStore
 
     private function ensureDirectoryExists(): void
     {
-        if (!is_dir($this->storagePath)) {
+        if (! is_dir($this->storagePath)) {
             mkdir($this->storagePath, 0755, true);
         }
     }

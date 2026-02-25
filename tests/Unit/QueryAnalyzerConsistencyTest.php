@@ -6,7 +6,6 @@ namespace QuerySentinel\Tests\Unit;
 
 use PHPUnit\Framework\TestCase;
 use QuerySentinel\Core\QueryAnalyzer;
-use QuerySentinel\Enums\ComplexityClass;
 
 /**
  * Tests the consistency validation and EXPLAIN enrichment logic

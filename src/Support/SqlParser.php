@@ -222,6 +222,7 @@ final class SqlParser
         if (preg_match('/\bWHERE\b(.+?)(?:\bORDER\s+BY\b|\bGROUP\s+BY\b|\bHAVING\b|\bLIMIT\b|\bUNION\b|$)/is', $sql, $match)) {
             return trim($match[1]);
         }
+
         return null;
     }
 

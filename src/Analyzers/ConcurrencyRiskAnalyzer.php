@@ -210,7 +210,7 @@ final class ConcurrencyRiskAnalyzer
         $primaryAccessType = $metrics['primary_access_type'] ?? null;
         $isConstOrZero = in_array($primaryAccessType, ['const_row', 'zero_row_const'], true);
 
-        if (!$isIndexBacked && !$isConstOrZero) {
+        if (! $isIndexBacked && ! $isConstOrZero) {
             $risk += 0.3;
         }
 
@@ -261,7 +261,7 @@ final class ConcurrencyRiskAnalyzer
      */
     private function describeIsolationImpact(string $lockScope, bool $isWriteQuery): string
     {
-        if (!$isWriteQuery) {
+        if (! $isWriteQuery) {
             return 'Read queries use consistent reads (MVCC snapshots) and do not acquire locks under default isolation level.';
         }
 

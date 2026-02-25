@@ -17,8 +17,8 @@ final class MultiDriverNormalizationTest extends TestCase
 
     protected function setUp(): void
     {
-        $this->mysql = new MySqlDriver();
-        $this->postgres = new PostgresDriver();
+        $this->mysql = new MySqlDriver;
+        $this->postgres = new PostgresDriver;
     }
 
     // ─── MySQL normalizeAccessType ───────────────────────────────────

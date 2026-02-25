@@ -24,7 +24,7 @@ final class PlanStabilityVolatilityTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->analyzer = new PlanStabilityAnalyzer();
+        $this->analyzer = new PlanStabilityAnalyzer;
     }
 
     // ---------------------------------------------------------------

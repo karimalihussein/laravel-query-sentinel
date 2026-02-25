@@ -17,7 +17,7 @@ final class ConcurrencyRiskAnalyzerTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->analyzer = new ConcurrencyRiskAnalyzer();
+        $this->analyzer = new ConcurrencyRiskAnalyzer;
     }
 
     // ---------------------------------------------------------------

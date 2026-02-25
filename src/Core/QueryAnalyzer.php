@@ -13,9 +13,9 @@ use QuerySentinel\Contracts\ScoringEngineInterface;
 use QuerySentinel\Enums\ComplexityClass;
 use QuerySentinel\Support\EngineConsistencyValidator;
 use QuerySentinel\Support\ExplainGuard;
-use QuerySentinel\Support\SqlParser;
 use QuerySentinel\Support\Report;
 use QuerySentinel\Support\Result;
+use QuerySentinel\Support\SqlParser;
 use QuerySentinel\Validation\ValidationPipeline;
 
 /**

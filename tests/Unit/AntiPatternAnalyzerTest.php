@@ -383,6 +383,7 @@ final class AntiPatternAnalyzerTest extends TestCase
                 return $finding;
             }
         }
+
         return null;
     }
 
@@ -396,6 +397,7 @@ final class AntiPatternAnalyzerTest extends TestCase
                 return $finding;
             }
         }
+
         return null;
     }
 }

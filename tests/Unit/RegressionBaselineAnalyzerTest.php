@@ -19,7 +19,7 @@ final class RegressionBaselineAnalyzerTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->tempDir = sys_get_temp_dir() . '/qs_regression_test_' . uniqid();
+        $this->tempDir = sys_get_temp_dir().'/qs_regression_test_'.uniqid();
         $this->store = new BaselineStore($this->tempDir);
     }
 
@@ -489,14 +489,14 @@ final class RegressionBaselineAnalyzerTest extends TestCase
         $analyzer = new RegressionBaselineAnalyzer($this->store);
 
         // First call with formatted SQL
-        $analyzer->analyze("SELECT  *  FROM   users   WHERE  id = 1", [
+        $analyzer->analyze('SELECT  *  FROM   users   WHERE  id = 1', [
             'composite_score' => 80.0,
             'execution_time_ms' => 5.0,
             'rows_examined' => 100,
         ]);
 
         // Second call with different whitespace — same query semantically
-        $result = $analyzer->analyze("select * from users where id = 1", [
+        $result = $analyzer->analyze('select * from users where id = 1', [
             'composite_score' => 80.0,
             'execution_time_ms' => 5.0,
             'rows_examined' => 100,
@@ -672,7 +672,7 @@ final class RegressionBaselineAnalyzerTest extends TestCase
 
     private function removeDirectory(string $path): void
     {
-        if (!is_dir($path)) {
+        if (! is_dir($path)) {
             return;
         }
 
@@ -686,7 +686,7 @@ final class RegressionBaselineAnalyzerTest extends TestCase
                 continue;
             }
 
-            $fullPath = $path . '/' . $item;
+            $fullPath = $path.'/'.$item;
             if (is_dir($fullPath)) {
                 $this->removeDirectory($fullPath);
             } else {

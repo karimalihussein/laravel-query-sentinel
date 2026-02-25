@@ -6,7 +6,6 @@ namespace QuerySentinel\Validation;
 
 use QuerySentinel\Exceptions\EngineAbortException;
 use QuerySentinel\Support\SqlParser;
-use QuerySentinel\Support\ValidationFailureReport;
 
 /**
  * Fail-safe validation pipeline. MUST pass before analysis.

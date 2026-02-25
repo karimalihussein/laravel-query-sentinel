@@ -29,7 +29,7 @@ final class SyntaxValidator
         $conn = $this->connection ?? config('query-diagnostics.connection');
 
         try {
-            DB::connection($conn)->select('EXPLAIN ' . $sql);
+            DB::connection($conn)->select('EXPLAIN '.$sql);
         } catch (\Throwable $e) {
             $report = $this->buildFailureReport($e, $sql);
 

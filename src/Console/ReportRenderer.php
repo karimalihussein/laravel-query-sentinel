@@ -241,7 +241,7 @@ final class ReportRenderer
         $command->newLine();
         $command->line('  Detailed Error:');
         $command->line('  ---------------------------------------------');
-        $command->line('  ' . str_replace("\n", "\n  ", $report->detailedError));
+        $command->line('  '.str_replace("\n", "\n  ", $report->detailedError));
         if ($report->sqlstateCode !== null) {
             $command->line(sprintf('  SQLSTATE: %s', $report->sqlstateCode));
         }
@@ -274,7 +274,7 @@ final class ReportRenderer
         }
         $command->line('  Raw SQL:');
         $command->line('  ----------------------------------------------------------------------');
-        $command->line('  ' . str_replace("\n", "\n  ", trim($sql)));
+        $command->line('  '.str_replace("\n", "\n  ", trim($sql)));
         $command->line('  ----------------------------------------------------------------------');
         $command->newLine();
     }

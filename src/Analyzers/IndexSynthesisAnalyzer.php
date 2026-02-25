@@ -494,7 +494,6 @@ final class IndexSynthesisAnalyzer
     /**
      * Extract column names from the index data columns structure.
      *
-     * @param  mixed  $columns
      * @return string[]
      */
     private function extractExistingIndexColumns(mixed $columns): array
@@ -616,7 +615,7 @@ final class IndexSynthesisAnalyzer
             $parts[] = sprintf('covering (%s)', implode(', ', $columns['select']));
         }
 
-        $rationale = 'ERS-ordered index for ' . implode(', ', $parts) . '.';
+        $rationale = 'ERS-ordered index for '.implode(', ', $parts).'.';
 
         if ($overlaps !== []) {
             $rationale .= sprintf(' Overlaps with existing: %s.', implode(', ', $overlaps));

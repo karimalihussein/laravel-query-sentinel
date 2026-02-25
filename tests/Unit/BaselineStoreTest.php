@@ -16,7 +16,7 @@ final class BaselineStoreTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->tempDir = sys_get_temp_dir() . '/qs_baseline_test_' . uniqid();
+        $this->tempDir = sys_get_temp_dir().'/qs_baseline_test_'.uniqid();
         $this->store = new BaselineStore($this->tempDir);
     }
 
@@ -159,7 +159,7 @@ final class BaselineStoreTest extends TestCase
         $oldTimestamp = date('c', strtotime('-60 days'));
         $this->store->save('hash1', ['timestamp' => $oldTimestamp, 'value' => 'old']);
 
-        $filePath = $this->tempDir . '/hash1.json';
+        $filePath = $this->tempDir.'/hash1.json';
         $this->assertFileExists($filePath);
 
         $this->store->prune(30);
@@ -173,7 +173,7 @@ final class BaselineStoreTest extends TestCase
 
     public function test_missing_storage_directory_created_automatically(): void
     {
-        $nestedPath = $this->tempDir . '/nested/deep/storage';
+        $nestedPath = $this->tempDir.'/nested/deep/storage';
         $store = new BaselineStore($nestedPath);
 
         $store->save('hash1', ['timestamp' => date('c'), 'value' => 'test']);
@@ -200,8 +200,8 @@ final class BaselineStoreTest extends TestCase
         $this->assertSame('query_b', $loadedB['value']);
 
         // Verify separate files exist
-        $this->assertFileExists($this->tempDir . '/hash_a.json');
-        $this->assertFileExists($this->tempDir . '/hash_b.json');
+        $this->assertFileExists($this->tempDir.'/hash_a.json');
+        $this->assertFileExists($this->tempDir.'/hash_b.json');
     }
 
     // ---------------------------------------------------------------
@@ -241,7 +241,7 @@ final class BaselineStoreTest extends TestCase
 
     public function test_prune_on_nonexistent_directory_returns_zero(): void
     {
-        $store = new BaselineStore('/tmp/nonexistent_dir_' . uniqid());
+        $store = new BaselineStore('/tmp/nonexistent_dir_'.uniqid());
 
         $pruned = $store->prune(30);
 
@@ -275,7 +275,7 @@ final class BaselineStoreTest extends TestCase
 
     private function removeDirectory(string $path): void
     {
-        if (!is_dir($path)) {
+        if (! is_dir($path)) {
             return;
         }
 
@@ -289,7 +289,7 @@ final class BaselineStoreTest extends TestCase
                 continue;
             }
 
-            $fullPath = $path . '/' . $item;
+            $fullPath = $path.'/'.$item;
             if (is_dir($fullPath)) {
                 $this->removeDirectory($fullPath);
             } else {

@@ -17,6 +17,7 @@ use QuerySentinel\Support\SqlParser;
 final class AntiPatternAnalyzer
 {
     private int $orChainThreshold;
+
     private int $missingLimitRowThreshold;
 
     public function __construct(int $orChainThreshold = 3, int $missingLimitRowThreshold = 10000)
@@ -173,7 +174,7 @@ final class AntiPatternAnalyzer
         $hasAggregate = (bool) preg_match('/\b(COUNT|SUM|AVG|MIN|MAX|GROUP_CONCAT)\s*\(/i', $sql);
         $rowsExamined = $metrics['rows_examined'] ?? 0;
 
-        if (!$hasLimit && !$hasAggregate && $rowsExamined > $this->missingLimitRowThreshold) {
+        if (! $hasLimit && ! $hasAggregate && $rowsExamined > $this->missingLimitRowThreshold) {
             $pattern = [
                 'pattern' => 'missing_limit',
                 'severity' => 'optimization',

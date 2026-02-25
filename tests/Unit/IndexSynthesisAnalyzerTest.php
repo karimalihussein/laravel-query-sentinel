@@ -161,11 +161,11 @@ final class IndexSynthesisAnalyzerTest extends TestCase
     {
         // Build a query that touches many tables via joins
         $sql = 'SELECT a.id FROM table_a a '
-            . 'JOIN table_b b ON b.a_id = a.id '
-            . 'JOIN table_c c ON c.b_id = b.id '
-            . 'JOIN table_d d ON d.c_id = c.id '
-            . 'JOIN table_e e ON e.d_id = d.id '
-            . 'WHERE a.status = 1 AND b.type = 2 AND c.active = 1 AND d.verified = 1';
+            .'JOIN table_b b ON b.a_id = a.id '
+            .'JOIN table_c c ON c.b_id = b.id '
+            .'JOIN table_d d ON d.c_id = c.id '
+            .'JOIN table_e e ON e.d_id = d.id '
+            .'WHERE a.status = 1 AND b.type = 2 AND c.active = 1 AND d.verified = 1';
 
         $result = $this->analyzer->analyze($sql, [], null, null);
 
@@ -442,9 +442,9 @@ final class IndexSynthesisAnalyzerTest extends TestCase
         $customAnalyzer = new IndexSynthesisAnalyzer(maxRecommendations: 1, maxColumnsPerIndex: 3);
 
         $sql = 'SELECT a.id FROM table_a a '
-            . 'JOIN table_b b ON b.a_id = a.id '
-            . 'JOIN table_c c ON c.b_id = b.id '
-            . 'WHERE a.status = 1 AND b.type = 2 AND c.active = 1';
+            .'JOIN table_b b ON b.a_id = a.id '
+            .'JOIN table_c c ON c.b_id = b.id '
+            .'WHERE a.status = 1 AND b.type = 2 AND c.active = 1';
 
         $result = $customAnalyzer->analyze($sql, [], null, null);
 

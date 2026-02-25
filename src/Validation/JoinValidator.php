@@ -18,6 +18,7 @@ final class JoinValidator
      * Validate join structure. Throws on invalid join.
      *
      * @param  array<string, string>  $aliasToTable
+     *
      * @throws EngineAbortException
      */
     public function validate(string $sql, array $aliasToTable): void

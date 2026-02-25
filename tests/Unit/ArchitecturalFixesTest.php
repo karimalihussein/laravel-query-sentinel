@@ -105,7 +105,7 @@ final class ArchitecturalFixesTest extends TestCase
 
     public function test_rows_growth_with_stable_per_row_performance_is_data_growth(): void
     {
-        $store = new BaselineStore(sys_get_temp_dir() . '/qs_arch_' . uniqid('', true));
+        $store = new BaselineStore(sys_get_temp_dir().'/qs_arch_'.uniqid('', true));
         $queryHash = hash('sha256', strtolower(trim('select id from users')));
 
         $store->save($queryHash, [
@@ -137,7 +137,7 @@ final class ArchitecturalFixesTest extends TestCase
 
     public function test_rows_growth_with_degraded_per_row_performance_is_regression(): void
     {
-        $store = new BaselineStore(sys_get_temp_dir() . '/qs_arch_' . uniqid('', true));
+        $store = new BaselineStore(sys_get_temp_dir().'/qs_arch_'.uniqid('', true));
         $queryHash = hash('sha256', strtolower(trim('select id from orders')));
 
         $store->save($queryHash, [
@@ -169,7 +169,7 @@ final class ArchitecturalFixesTest extends TestCase
 
     public function test_large_data_growth_logged_as_info_finding(): void
     {
-        $store = new BaselineStore(sys_get_temp_dir() . '/qs_arch_' . uniqid('', true));
+        $store = new BaselineStore(sys_get_temp_dir().'/qs_arch_'.uniqid('', true));
         $queryHash = hash('sha256', strtolower(trim('select name from products')));
 
         $store->save($queryHash, [

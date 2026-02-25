@@ -415,19 +415,19 @@ PLAN;
     public function test_mysql_access_type_mappings(): void
     {
         // zero_row_const → const
-        $plan = "-> Zero rows (no matching row in const table)  (cost=0..0 rows=0) (actual time=0.003..0.003 rows=0 loops=1)";
+        $plan = '-> Zero rows (no matching row in const table)  (cost=0..0 rows=0) (actual time=0.003..0.003 rows=0 loops=1)';
         $this->assertSame('const', $this->parser->parse($plan)['mysql_access_type']);
 
         // const_row → const
-        $plan = "-> Constant row from users  (cost=0..0 rows=1) (actual time=0.015..0.016 rows=1 loops=1)";
+        $plan = '-> Constant row from users  (cost=0..0 rows=1) (actual time=0.015..0.016 rows=1 loops=1)';
         $this->assertSame('const', $this->parser->parse($plan)['mysql_access_type']);
 
         // single_row_lookup → eq_ref
-        $plan = "-> Single-row index lookup on users using PRIMARY (id=1)  (cost=1 rows=1) (actual time=0.010..0.010 rows=1 loops=1)";
+        $plan = '-> Single-row index lookup on users using PRIMARY (id=1)  (cost=1 rows=1) (actual time=0.010..0.010 rows=1 loops=1)';
         $this->assertSame('eq_ref', $this->parser->parse($plan)['mysql_access_type']);
 
         // covering_index_lookup → ref
-        $plan = "-> Covering index lookup on users using idx_cover (status = 1)  (cost=5 rows=100) (actual time=0.050..0.100 rows=100 loops=1)";
+        $plan = '-> Covering index lookup on users using idx_cover (status = 1)  (cost=5 rows=100) (actual time=0.050..0.100 rows=100 loops=1)';
         $this->assertSame('ref', $this->parser->parse($plan)['mysql_access_type']);
 
         // index_lookup → ref
@@ -435,15 +435,15 @@ PLAN;
         $this->assertSame('ref', $this->parser->parse($plan)['mysql_access_type']);
 
         // index_range_scan → range
-        $plan = "-> Index range scan on users using idx_age over (20 < age < 30)  (cost=50 rows=500) (actual time=0.050..0.500 rows=500 loops=1)";
+        $plan = '-> Index range scan on users using idx_age over (20 < age < 30)  (cost=50 rows=500) (actual time=0.050..0.500 rows=500 loops=1)';
         $this->assertSame('range', $this->parser->parse($plan)['mysql_access_type']);
 
         // index_scan → index
-        $plan = "-> Index scan on users using idx_name  (cost=500 rows=50000) (actual time=0.100..200.000 rows=50000 loops=1)";
+        $plan = '-> Index scan on users using idx_name  (cost=500 rows=50000) (actual time=0.100..200.000 rows=50000 loops=1)';
         $this->assertSame('index', $this->parser->parse($plan)['mysql_access_type']);
 
         // table_scan → ALL
-        $plan = "-> Table scan on users  (cost=100 rows=50000) (actual time=0.100..150.000 rows=50000 loops=1)";
+        $plan = '-> Table scan on users  (cost=100 rows=50000) (actual time=0.100..150.000 rows=50000 loops=1)';
         $this->assertSame('ALL', $this->parser->parse($plan)['mysql_access_type']);
     }
 
@@ -561,7 +561,7 @@ PLAN;
 
     public function test_parsing_valid_flag_set_when_actual_metrics_present(): void
     {
-        $plan = "-> Table scan on users  (cost=100 rows=50000) (actual time=0.100..150.000 rows=50000 loops=1)";
+        $plan = '-> Table scan on users  (cost=100 rows=50000) (actual time=0.100..150.000 rows=50000 loops=1)';
         $metrics = $this->parser->parse($plan);
         $this->assertTrue($metrics['parsing_valid']);
     }

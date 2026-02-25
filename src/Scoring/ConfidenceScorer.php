@@ -20,7 +20,6 @@ final class ConfidenceScorer
      * @param  array<string, mixed>  $metrics  From MetricsExtractor
      * @param  ?array<string, mixed>  $cardinalityDrift  From CardinalityDriftAnalyzer (Phase 1)
      * @param  ?array<string, mixed>  $stabilityAnalysis  From PlanStabilityAnalyzer
-     * @param  ?EnvironmentContext  $environment
      * @param  bool  $supportsAnalyze  Whether EXPLAIN ANALYZE is available
      * @return array{confidence: array<string, mixed>, findings: Finding[]}
      */

@@ -68,6 +68,7 @@ final class SchemaValidator
      * Validate all column references exist. Throws on first missing column.
      *
      * @param  array<string, string>  $aliasToTable
+     *
      * @throws EngineAbortException
      */
     public function validateColumns(string $sql, array $aliasToTable): void
@@ -158,7 +159,7 @@ final class SchemaValidator
     private function columnExists(Connection $conn, string $driver, string $dbName, string $table, string $column): ?object
     {
         if ($driver === 'sqlite') {
-            $cols = $conn->select("PRAGMA table_info('" . str_replace("'", "''", $table) . "')");
+            $cols = $conn->select("PRAGMA table_info('".str_replace("'", "''", $table)."')");
             foreach ($cols as $c) {
                 if (($c->name ?? null) === $column) {
                     return (object) ['COLUMN_NAME' => $column];
@@ -189,7 +190,7 @@ final class SchemaValidator
     private function listColumns(Connection $conn, string $driver, string $dbName, string $table): array
     {
         if ($driver === 'sqlite') {
-            $rows = $conn->select("PRAGMA table_info('" . str_replace("'", "''", $table) . "')");
+            $rows = $conn->select("PRAGMA table_info('".str_replace("'", "''", $table)."')");
 
             return array_map(fn ($r) => (object) ['COLUMN_NAME' => $r->name], $rows);
         }

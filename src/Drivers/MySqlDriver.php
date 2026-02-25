@@ -108,7 +108,7 @@ final class MySqlDriver implements DriverInterface
                     'SELECT histogram FROM information_schema.COLUMN_STATISTICS WHERE schema_name = ? AND table_name = ? AND column_name = ?',
                     [$dbName, $table, $column]
                 );
-                $hasHistogram = !empty($histResult);
+                $hasHistogram = ! empty($histResult);
             }
 
             // Get basic column stats

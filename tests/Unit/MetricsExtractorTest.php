@@ -167,7 +167,7 @@ final class MetricsExtractorTest extends TestCase
         foreach ($indexTypes as $accessType) {
             $root = new PlanNode(
                 operation: "test $accessType",
-                rawLine: "-> test (actual time=0.01..0.01 rows=1 loops=1)",
+                rawLine: '-> test (actual time=0.01..0.01 rows=1 loops=1)',
                 accessType: $accessType,
                 actualTimeEnd: 0.01,
                 actualRows: $accessType === 'zero_row_const' ? 0 : 1,
@@ -207,7 +207,7 @@ final class MetricsExtractorTest extends TestCase
         foreach (['zero_row_const', 'const_row', 'single_row_lookup'] as $type) {
             $root = new PlanNode(
                 operation: "test $type",
-                rawLine: "-> test (actual time=0.01..0.01 rows=1 loops=1)",
+                rawLine: '-> test (actual time=0.01..0.01 rows=1 loops=1)',
                 accessType: $type,
                 actualTimeEnd: 0.01,
                 actualRows: $type === 'zero_row_const' ? 0 : 1,
@@ -224,7 +224,7 @@ final class MetricsExtractorTest extends TestCase
         foreach (['covering_index_lookup', 'index_lookup', 'fulltext_index'] as $type) {
             $root = new PlanNode(
                 operation: "test $type",
-                rawLine: "-> test (actual time=0.01..0.1 rows=10 loops=1)",
+                rawLine: '-> test (actual time=0.01..0.1 rows=10 loops=1)',
                 accessType: $type,
                 actualTimeEnd: 0.1,
                 actualRows: 10,
@@ -494,7 +494,7 @@ final class MetricsExtractorTest extends TestCase
         foreach ($expectedMappings as $internal => $expected) {
             $root = new PlanNode(
                 operation: "test $internal",
-                rawLine: "-> test (actual time=0.01..0.01 rows=1 loops=1)",
+                rawLine: '-> test (actual time=0.01..0.01 rows=1 loops=1)',
                 accessType: $internal,
                 actualTimeEnd: 0.01,
                 actualRows: $internal === 'zero_row_const' ? 0 : 1,

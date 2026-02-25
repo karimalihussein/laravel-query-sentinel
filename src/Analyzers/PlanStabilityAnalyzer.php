@@ -259,7 +259,7 @@ final class PlanStabilityAnalyzer
         }
 
         // Optimizer hints stabilize the plan
-        if (!empty($hints)) {
+        if (! empty($hints)) {
             $volatility -= 20;
         }
 
