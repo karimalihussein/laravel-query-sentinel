@@ -98,8 +98,8 @@ jobs:
       - name: Run Semgrep
         run: |
           docker run --rm -v "${{ github.workspace }}:/src" semgrep/semgrep semgrep scan \
-            --config p/php \
-            --config p/owasp-php \
+            --config auto \
             --no-git-ignore \
+            --metrics=off \
             /src
-        # To fail the job on findings, add: --error
+        # auto = detect languages (PHP) and apply registry rules. To fail on findings, add: --error
