@@ -85,7 +85,7 @@ jobs:
           "
 
   # ---------------------------------------------------------------------------
-  # SAST: Semgrep (PHP). CodeQL does not support PHP; Semgrep runs without token.
+  # SAST: Semgrep (PHP). Uses auto config (requires metrics); no token needed.
   # ---------------------------------------------------------------------------
   sast:
     name: Semgrep (PHP)
@@ -97,9 +97,8 @@ jobs:
 
       - name: Run Semgrep
         run: |
-          docker run --rm -v "${{ github.workspace }}:/src" semgrep/semgrep semgrep scan \
+          docker run --rm -v "${{ github.workspace }}:/src" -w /src semgrep/semgrep semgrep scan \
             --config auto \
             --no-git-ignore \
-            --metrics=off \
             /src
-        # auto = detect languages (PHP) and apply registry rules. To fail on findings, add: --error
+        # --config auto needs metrics (default). To fail on findings add: --error
