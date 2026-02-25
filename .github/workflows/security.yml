@@ -1,0 +1,150 @@
+# Security pipeline: supply chain, dependency audit, SAST.
+# Separate from CI; does not run tests or style. Fail on HIGH+ vulnerabilities.
+name: Security
+
+on:
+  schedule:
+    # Weekly, Monday 00:00 UTC
+    - cron: '0 0 * * 1'
+  workflow_dispatch: {}
+  push:
+    branches: [main]
+    paths:
+      - 'composer.json'
+      - 'composer.lock'
+      - '**.php'
+      - '.github/workflows/security.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  COMPOSER_AUDIT_FAIL_ON: 'high'   # fail if any advisory severity is high or critical
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Lockfile and composer integrity
+  # ---------------------------------------------------------------------------
+  lockfile:
+    name: Lockfile & composer
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Enforce composer.lock exists
+        run: |
+          if [ ! -f composer.lock ]; then
+            echo "::error::composer.lock must be committed. Run 'composer update --no-install' and commit the lock file."
+            exit 1
+          fi
+
+      - name: Validate composer.json
+        run: composer validate --strict --no-check-publish
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: dom, mbstring, json
+          coverage: none
+
+      - name: Get Composer cache dir
+        id: composer-cache
+        run: echo "dir=$(composer config cache-files-dir)" >> $GITHUB_OUTPUT
+
+      - name: Cache Composer
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.composer-cache.outputs.dir }}
+          key: security-composer-${{ hashFiles('composer.lock') }}
+
+      - name: Install dependencies (respect lock)
+        run: composer install --prefer-dist --no-interaction --no-progress --no-dev
+
+  # ---------------------------------------------------------------------------
+  # Dependency vulnerability audit (composer audit)
+  # ---------------------------------------------------------------------------
+  audit:
+    name: Dependency audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: [lockfile]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: dom, mbstring, json
+          coverage: none
+
+      - name: Get Composer cache dir
+        id: composer-cache
+        run: echo "dir=$(composer config cache-files-dir)" >> $GITHUB_OUTPUT
+
+      - name: Cache Composer
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.composer-cache.outputs.dir }}
+          key: security-composer-${{ hashFiles('composer.lock') }}
+
+      - name: Install dependencies
+        run: composer install --prefer-dist --no-interaction --no-progress
+
+      - name: Run composer audit
+        id: audit
+        run: |
+          composer audit --format=json --no-dev > /tmp/audit.json 2>/dev/null || true
+          php -r "
+            \$f = '/tmp/audit.json';
+            if (!is_readable(\$f)) { echo 'No audit output'; exit(0); }
+            \$j = json_decode(file_get_contents(\$f), true);
+            if (!isset(\$j['advisories']) || \$j['advisories'] === []) { echo 'No known vulnerabilities.'; exit(0); }
+            \$fail = ['critical', 'high'];
+            foreach (\$j['advisories'] as \$pkg => \$advs) {
+              foreach (\$advs as \$a) {
+                \$s = strtolower(\$a['severity'] ?? '');
+                if (in_array(\$s, \$fail, true)) {
+                  fwrite(STDERR, 'Security: vulnerability with severity ' . \$s . ' in ' . \$pkg . PHP_EOL);
+                  exit(1);
+                }
+              }
+            }
+            echo 'Vulnerabilities found but none at HIGH/CRITICAL threshold.'; exit(0);
+          "
+        env:
+          COMPOSER_AUDIT_FAIL_ON: ${{ env.COMPOSER_AUDIT_FAIL_ON }}
+
+  # ---------------------------------------------------------------------------
+  # CodeQL SAST (PHP)
+  # ---------------------------------------------------------------------------
+  codeql:
+    name: CodeQL
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      security-events: write
+      actions: read
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: php
+          queries: security-extended
+
+      - name: Autobuild (PHP)
+        uses: github/codeql-action/autobuild@v3
+
+      - name: Perform CodeQL analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: /language:php

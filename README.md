@@ -1,5 +1,8 @@
 # Laravel Query Sentinel
 
+[![CI](https://github.com/karimalihussein/laravel-query-sentinel/actions/workflows/ci.yml/badge.svg)](https://github.com/karimalihussein/laravel-query-sentinel/actions/workflows/ci.yml)
+[![Security](https://github.com/karimalihussein/laravel-query-sentinel/actions/workflows/security.yml/badge.svg)](https://github.com/karimalihussein/laravel-query-sentinel/actions/workflows/security.yml)
+
 A driver-agnostic, CI-ready, extensible Laravel package for deep database query performance analysis. Provides EXPLAIN ANALYZE diagnostics, weighted composite scoring, complexity classification, N+1 detection, scalability projections, and attribute-based automatic profiling for production applications.
 
 ## Table of Contents
