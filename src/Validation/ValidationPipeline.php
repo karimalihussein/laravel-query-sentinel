@@ -68,6 +68,7 @@ final class ValidationPipeline
         }
 
         $syntaxValidator = new SyntaxValidator($this->connection, $driver);
+
         return $result->merge($syntaxValidator->validate($sql));
     }
 }

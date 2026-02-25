@@ -158,7 +158,7 @@ abstract class TestCase extends BaseTestCase
             return;
         }
 
-        $migrationsPath = realpath(__DIR__ . '/database/migrations');
+        $migrationsPath = realpath(__DIR__.'/database/migrations');
         if ($migrationsPath === false || ! is_dir($migrationsPath)) {
             return;
         }
