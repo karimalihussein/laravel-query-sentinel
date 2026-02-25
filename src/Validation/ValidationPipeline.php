@@ -4,16 +4,14 @@ declare(strict_types=1);
 
 namespace QuerySentinel\Validation;
 
-use QuerySentinel\Exceptions\EngineAbortException;
 use QuerySentinel\Support\SqlParser;
+use QuerySentinel\Support\ValidationResult;
 
 /**
- * Fail-safe validation pipeline. MUST pass before analysis.
+ * Fail-safe validation pipeline. Returns ValidationResult; callers decide whether to abort.
  *
- * Order: Schema (tables) → Schema (columns) → Joins → Syntax (EXPLAIN) → EXPLAIN ANALYZE
- *
- * Schema before Syntax because EXPLAIN fails for both missing tables and syntax errors;
- * we validate schema first to give precise "table/column not found" errors.
+ * Order: Schema (tables) → Schema (columns) → Joins → Syntax (EXPLAIN)
+ * Schema before Syntax so we can give precise "table/column not found" errors.
  */
 final class ValidationPipeline
 {
@@ -24,11 +22,9 @@ final class ValidationPipeline
     ) {}
 
     /**
-     * Run full validation. Throws EngineAbortException on first failure.
-     *
-     * @throws EngineAbortException
+     * Run full validation. Returns ValidationResult (invalid on first failure).
      */
-    public function validate(string $sql): void
+    public function validate(string $sql): ValidationResult
     {
         $aliasToTable = SqlParser::extractTableAliases($sql);
 
@@ -43,19 +39,35 @@ final class ValidationPipeline
             $driver = app()->make(\QuerySentinel\Contracts\DriverInterface::class);
         }
 
-        // 1. Table existence
-        $schemaValidator = new SchemaValidator($introspector ?? throw new \RuntimeException('SchemaIntrospector unavailable'), $this->connection);
-        $schemaValidator->validateTables($sql);
+        if ($introspector === null) {
+            return ValidationResult::invalid([
+                new \QuerySentinel\Support\ValidationFailureReport(
+                    status: 'ERROR — Validation Unavailable',
+                    failureStage: 'Pipeline',
+                    detailedError: 'SchemaIntrospector not available',
+                    recommendations: ['Ensure QuerySentinel is properly configured.'],
+                ),
+            ]);
+        }
 
-        // 2. Column existence
-        $schemaValidator->validateColumns($sql, $aliasToTable);
+        $schemaValidator = new SchemaValidator($introspector, $this->connection);
+        $result = $schemaValidator->validateTables($sql);
+        if (! $result->isValid()) {
+            return $result;
+        }
 
-        // 3. Join conditions
+        $result = $result->merge($schemaValidator->validateColumns($sql, $aliasToTable));
+        if (! $result->isValid()) {
+            return $result;
+        }
+
         $joinValidator = new JoinValidator;
-        $joinValidator->validate($sql, $aliasToTable);
+        $result = $result->merge($joinValidator->validate($sql, $aliasToTable));
+        if (! $result->isValid()) {
+            return $result;
+        }
 
-        // 4. Syntax (EXPLAIN without ANALYZE — at this point schema is valid)
         $syntaxValidator = new SyntaxValidator($this->connection, $driver);
-        $syntaxValidator->validate($sql);
+        return $result->merge($syntaxValidator->validate($sql));
     }
 }

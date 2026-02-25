@@ -18,6 +18,7 @@ use QuerySentinel\Analyzers\WorkloadAnalyzer;
 use QuerySentinel\Console\DiagnoseQueryCommand;
 use QuerySentinel\Contracts\AnalyzerInterface;
 use QuerySentinel\Contracts\DriverInterface;
+use QuerySentinel\Contracts\ExplainExecutorInterface;
 use QuerySentinel\Contracts\PlanParserInterface;
 use QuerySentinel\Contracts\RuleRegistryInterface;
 use QuerySentinel\Contracts\ScoringEngineInterface;
@@ -34,6 +35,7 @@ use QuerySentinel\Rules\RuleRegistry;
 use QuerySentinel\Scoring\ConfidenceScorer;
 use QuerySentinel\Scoring\DefaultScoringEngine;
 use QuerySentinel\Support\BaselineStore;
+use QuerySentinel\Support\DriverExplainExecutor;
 use QuerySentinel\Support\ExecutionGuard;
 use QuerySentinel\Support\SqlSanitizer;
 
@@ -44,6 +46,7 @@ final class QueryDiagnosticsServiceProvider extends ServiceProvider
         $this->mergeConfigFrom(__DIR__.'/../config/query-diagnostics.php', 'query-diagnostics');
 
         $this->registerDriver();
+        $this->registerExplainExecutor();
         $this->registerSchemaIntrospector();
         $this->registerParser();
         $this->registerScoringEngine();
@@ -83,6 +86,13 @@ final class QueryDiagnosticsServiceProvider extends ServiceProvider
                 'sqlite' => new \QuerySentinel\Drivers\SqliteDriver($connection),
                 default => new MySqlDriver($connection),
             };
+        });
+    }
+
+    private function registerExplainExecutor(): void
+    {
+        $this->app->singleton(ExplainExecutorInterface::class, function ($app) {
+            return new DriverExplainExecutor($app->make(DriverInterface::class));
         });
     }
 

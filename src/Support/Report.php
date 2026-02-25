@@ -21,14 +21,54 @@ final readonly class Report
         public \DateTimeImmutable $analyzedAt,
         public array $scalability = [],
         public string $mode = 'sql',
+        public ?ValidationFailureReport $validationFailure = null,
     ) {}
+
+    public function isValidationFailure(): bool
+    {
+        return $this->validationFailure !== null;
+    }
+
+    /**
+     * Create a report that represents a validation/EXPLAIN failure (no scoring).
+     */
+    public static function validationFailure(
+        string $sql,
+        string $driver,
+        ValidationFailureReport $failure,
+        string $mode = 'sql',
+    ): self {
+        $result = new Result(
+            sql: $sql,
+            driver: $driver,
+            explainRows: [],
+            plan: '',
+            metrics: [],
+            scores: ['grade' => 'N/A', 'composite_score' => 0.0],
+            findings: [],
+            executionTimeMs: 0.0,
+        );
+
+        return new self(
+            result: $result,
+            grade: 'N/A',
+            passed: false,
+            summary: $failure->status,
+            recommendations: $failure->recommendations,
+            compositeScore: 0.0,
+            analyzedAt: new \DateTimeImmutable,
+            scalability: [],
+            mode: $mode,
+            validationFailure: $failure,
+        );
+    }
 
     /**
      * @return array<string, mixed>
      */
     public function toArray(): array
     {
-        return [
+        $out = [
             'mode' => $this->mode,
             'result' => $this->result->toArray(),
             'grade' => $this->grade,
@@ -39,6 +79,12 @@ final readonly class Report
             'scalability' => $this->scalability,
             'analyzed_at' => $this->analyzedAt->format('c'),
         ];
+
+        if ($this->validationFailure !== null) {
+            $out['validation_failure'] = $this->validationFailure->toArray();
+        }
+
+        return $out;
     }
 
     public function toJson(int $flags = 0): string

@@ -6,13 +6,13 @@ namespace QuerySentinel\Validation;
 
 use Illuminate\Support\Facades\DB;
 use QuerySentinel\Contracts\DriverInterface;
-use QuerySentinel\Exceptions\EngineAbortException;
 use QuerySentinel\Support\TypoIntelligence;
 use QuerySentinel\Support\ValidationFailureReport;
+use QuerySentinel\Support\ValidationResult;
 
 /**
- * Validates SQL syntax before analysis.
- * Uses EXPLAIN (without ANALYZE) — fails on syntax errors, returns structured error.
+ * Validates SQL syntax via EXPLAIN (without ANALYZE).
+ * Returns ValidationResult; no exceptions.
  */
 final class SyntaxValidator
 {
@@ -22,26 +22,25 @@ final class SyntaxValidator
     ) {}
 
     /**
-     * Validate syntax. Throws EngineAbortException on failure.
-     *
-     * @throws EngineAbortException
+     * Validate syntax. Returns ValidationResult (invalid on EXPLAIN failure).
      */
-    public function validate(string $sql): void
+    public function validate(string $sql): ValidationResult
     {
         $conn = $this->connection ?? config('query-diagnostics.connection');
 
         try {
             if ($this->driver !== null) {
-                // Use driver abstraction which knows correct EXPLAIN form.
                 $this->driver->runExplain($sql);
             } else {
                 DB::connection($conn)->select('EXPLAIN '.$sql);
             }
         } catch (\Throwable $e) {
-            $report = $this->buildFailureReport($e, $sql);
-
-            throw new EngineAbortException('Invalid SQL syntax', $report, $e);
+            return ValidationResult::invalid([
+                $this->buildFailureReport($e, $sql),
+            ]);
         }
+
+        return ValidationResult::valid();
     }
 
     private function buildFailureReport(\Throwable $e, string $sql): ValidationFailureReport

@@ -21,16 +21,14 @@ use QuerySentinel\Validation\ValidationPipeline;
 /**
  * Core query analysis pipeline. Framework-agnostic.
  *
- * FAIL-SAFE: Validation runs first. No analysis without valid SQL/schema/EXPLAIN.
+ * Result-based: validation/EXPLAIN/consistency failures return a Report with validationFailure set (no throw).
  *
  * Pipeline:
- *   1. ValidationPipeline: tables, columns, joins, syntax
- *   2. ExplainGuard: EXPLAIN ANALYZE (throws on failure)
- *   3. Parser extracts metrics from plan
- *   4. Enrichment + consistency validation
- *   5. EngineConsistencyValidator: abort if access_type=UNKNOWN or plan invalid
- *   6. Scoring, rules, scalability
- *   7. Report
+ *   1. ValidationPipeline → ValidationResult; if invalid → Report::validationFailure
+ *   2. ExplainExecutor → ExplainResult; if failure → Report::validationFailure
+ *   3. Parser, enrichment, consistency
+ *   4. EngineConsistencyValidator::validateBeforeReportResult; if invalid → Report::validationFailure
+ *   5. Scoring, rules, scalability, Report
  */
 final class QueryAnalyzer implements AnalyzerInterface
 {
@@ -45,28 +43,62 @@ final class QueryAnalyzer implements AnalyzerInterface
 
     /**
      * Analyze a SQL query and produce a complete diagnostic report.
-     *
-     * @throws \QuerySentinel\Exceptions\EngineAbortException When validation or EXPLAIN fails (strict mode)
+     * Never throws: validation/EXPLAIN failures return Report with validationFailure set.
      */
     public function analyze(string $sql, string $mode = 'sql'): Report
     {
         $conn = $this->connection ?? config('query-diagnostics.connection');
         $strict = config('query-diagnostics.validation.strict', true);
 
-        if ($strict) {
-            // 1. Mandatory pre-execution validation
-            $pipeline = new ValidationPipeline($conn);
-            $pipeline->validate($sql);
+        $plan = '';
+        $explainRows = [];
 
-            // 2. EXPLAIN ANALYZE (hard guard — throws on any failure)
+        if ($strict) {
+            // 1. Pre-execution validation (result-based, no throw)
+            $pipeline = new ValidationPipeline($conn);
+            $validationResult = $pipeline->validate($sql);
+            if (! $validationResult->isValid()) {
+                $failure = $validationResult->getFirstFailure();
+
+                return Report::validationFailure(
+                    $sql,
+                    $this->driver->getName(),
+                    $failure ?? new \QuerySentinel\Support\ValidationFailureReport(
+                        status: 'ERROR — Validation Failed',
+                        failureStage: 'Pipeline',
+                        detailedError: 'Validation failed',
+                        recommendations: ['Check SQL and schema.'],
+                    ),
+                    $mode
+                );
+            }
+
+            // 2. EXPLAIN ANALYZE (result-based, no throw)
             $explainGuard = new ExplainGuard($this->driver);
-            $plan = $explainGuard->runExplainAnalyze($sql);
-            $explainRows = $explainGuard->runExplain($sql);
+            $explainResult = $explainGuard->runExplainAnalyzeResult($sql);
+            if (! $explainResult->isSuccess()) {
+                $failure = $explainResult->getFailure();
+
+                return Report::validationFailure(
+                    $sql,
+                    $this->driver->getName(),
+                    $failure ?? new \QuerySentinel\Support\ValidationFailureReport(
+                        status: 'ERROR — EXPLAIN Failed',
+                        failureStage: 'Explain',
+                        detailedError: $explainResult->getPlan(),
+                        recommendations: ['Analysis aborted.'],
+                    ),
+                    $mode
+                );
+            }
+            $plan = $explainResult->getPlan();
+            $explainRows = $explainResult->getExplainRows();
         } else {
             // Legacy: direct driver calls (for SQLite tests, etc.)
             $plan = $this->driver->runExplainAnalyze($sql);
             $explainRows = $this->driver->runExplain($sql);
         }
+
         $metrics = $this->parser->parse($plan);
 
         // Enrich metrics from tabular EXPLAIN data (secondary source)
@@ -87,10 +119,18 @@ final class QueryAnalyzer implements AnalyzerInterface
             }
         }
 
-        // 3. Engine consistency: never report without valid plan (strict mode only)
+        // 3. Engine consistency (result-based, no throw)
         if ($strict) {
             $consistency = new EngineConsistencyValidator;
-            $consistency->validateBeforeReport($plan, $metrics, true, true);
+            $consistencyResult = $consistency->validateBeforeReportResult($plan, $metrics, true, true);
+            if (! $consistencyResult['valid'] && $consistencyResult['failure'] !== null) {
+                return Report::validationFailure(
+                    $sql,
+                    $this->driver->getName(),
+                    $consistencyResult['failure'],
+                    $mode
+                );
+            }
         }
 
         $scores = $this->scoringEngine->score($metrics);

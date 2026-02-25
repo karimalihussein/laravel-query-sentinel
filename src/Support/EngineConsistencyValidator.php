@@ -9,15 +9,53 @@ use QuerySentinel\Exceptions\EngineAbortException;
 /**
  * Engine consistency enforcement.
  *
- * Two modes:
- * - validateBeforeReport(): pre-analysis guard (throws on invalid state)
- * - validate(): post-analysis contradiction detector (log-only, graceful)
+ * - validateBeforeReportResult(): returns result (no throw); use for result-based flow.
+ * - validateBeforeReport(): throws on invalid state (legacy).
+ * - validate(): post-analysis contradiction detector (log-only, graceful).
  */
 final class EngineConsistencyValidator
 {
     /**
      * Validate that metrics/plan are valid before report generation.
-     * Throws EngineAbortException if state is invalid.
+     * Returns result; does not throw.
+     *
+     * @param  array<string, mixed>  $metrics
+     * @return array{valid: bool, failure: ?ValidationFailureReport}
+     */
+    public function validateBeforeReportResult(
+        string $plan,
+        array $metrics,
+        bool $syntaxValid = true,
+        bool $schemaValid = true,
+    ): array {
+        $accessType = $metrics['primary_access_type'] ?? $metrics['access_type'] ?? null;
+        $isUnknown = $accessType === 'unknown' || $accessType === 'UNKNOWN' || $accessType === null;
+        $planEmpty = trim($plan) === '' || str_starts_with(trim($plan), '-- EXPLAIN failed:');
+
+        if ($isUnknown || $planEmpty || ! $syntaxValid || ! $schemaValid) {
+            return [
+                'valid' => false,
+                'failure' => new ValidationFailureReport(
+                    status: 'ERROR — Analysis Aborted',
+                    failureStage: 'Engine Consistency',
+                    detailedError: 'Invalid engine state: access_type='.($accessType ?? 'null')
+                        .', plan_empty='.($planEmpty ? 'yes' : 'no')
+                        .', syntax_valid='.($syntaxValid ? 'yes' : 'no')
+                        .', schema_valid='.($schemaValid ? 'yes' : 'no'),
+                    recommendations: [
+                        'Do not generate performance report without valid explain plan.',
+                        'Ensure validation pipeline passed before analysis.',
+                    ],
+                ),
+            ];
+        }
+
+        return ['valid' => true, 'failure' => null];
+    }
+
+    /**
+     * Validate that metrics/plan are valid before report generation.
+     * Throws EngineAbortException if state is invalid (legacy).
      *
      * @param  array<string, mixed>  $metrics
      *
@@ -29,26 +67,10 @@ final class EngineConsistencyValidator
         bool $syntaxValid = true,
         bool $schemaValid = true,
     ): void {
-        $accessType = $metrics['primary_access_type'] ?? $metrics['access_type'] ?? null;
-        $isUnknown = $accessType === 'unknown' || $accessType === 'UNKNOWN' || $accessType === null;
-        $planEmpty = trim($plan) === '' || str_starts_with(trim($plan), '-- EXPLAIN failed:');
+        $result = $this->validateBeforeReportResult($plan, $metrics, $syntaxValid, $schemaValid);
 
-        if ($isUnknown || $planEmpty || ! $syntaxValid || ! $schemaValid) {
-            throw new EngineAbortException(
-                'Engine state invalid — cannot produce performance report',
-                new ValidationFailureReport(
-                    status: 'ERROR — Analysis Aborted',
-                    failureStage: 'Engine Consistency',
-                    detailedError: 'Invalid engine state: access_type='.($accessType ?? 'null')
-                        .', plan_empty='.($planEmpty ? 'yes' : 'no')
-                        .', syntax_valid='.($syntaxValid ? 'yes' : 'no')
-                        .', schema_valid='.($schemaValid ? 'yes' : 'no'),
-                    recommendations: [
-                        'Do not generate performance report without valid explain plan.',
-                        'Ensure validation pipeline passed before analysis.',
-                    ],
-                )
-            );
+        if (! $result['valid'] && $result['failure'] !== null) {
+            throw new EngineAbortException('Engine state invalid — cannot produce performance report', $result['failure']);
         }
     }
 

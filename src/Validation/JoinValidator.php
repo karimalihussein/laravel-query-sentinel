@@ -4,24 +4,23 @@ declare(strict_types=1);
 
 namespace QuerySentinel\Validation;
 
-use QuerySentinel\Exceptions\EngineAbortException;
 use QuerySentinel\Support\SqlParser;
 use QuerySentinel\Support\ValidationFailureReport;
+use QuerySentinel\Support\ValidationResult;
 
 /**
  * Validates JOIN conditions: aliases exist, ON columns reference valid tables.
  * Assumes SchemaValidator has already run (tables and columns exist).
+ * Returns ValidationResult; no exceptions.
  */
 final class JoinValidator
 {
     /**
-     * Validate join structure. Throws on invalid join.
+     * Validate join structure. Returns ValidationResult.
      *
      * @param  array<string, string>  $aliasToTable
-     *
-     * @throws EngineAbortException
      */
-    public function validate(string $sql, array $aliasToTable): void
+    public function validate(string $sql, array $aliasToTable): ValidationResult
     {
         $tables = SqlParser::extractTables($sql);
         $joinCols = SqlParser::extractJoinColumns($sql);
@@ -35,8 +34,7 @@ final class JoinValidator
             $resolvedTable = $aliasToTable[$tableOrAlias] ?? $tableOrAlias;
 
             if (! in_array($resolvedTable, $tables, true) && ! in_array($tableOrAlias, $tables, true)) {
-                throw new EngineAbortException(
-                    'Invalid join condition',
+                return ValidationResult::invalid([
                     new ValidationFailureReport(
                         status: 'ERROR — Invalid Join Condition',
                         failureStage: 'Join Validation',
@@ -47,9 +45,11 @@ final class JoinValidator
                         ],
                         missingColumn: $column,
                         missingTable: $tableOrAlias,
-                    )
-                );
+                    ),
+                ]);
             }
         }
+
+        return ValidationResult::valid();
     }
 }

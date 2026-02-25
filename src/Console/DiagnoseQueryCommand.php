@@ -50,6 +50,16 @@ final class DiagnoseQueryCommand extends Command
             return self::FAILURE;
         }
 
+        if ($diagnostic->report->isValidationFailure() && $diagnostic->report->validationFailure !== null) {
+            if ($this->option('json')) {
+                $this->line($diagnostic->report->validationFailure->toJson(JSON_PRETTY_PRINT));
+            } else {
+                $renderer->renderValidationFailure($this, $diagnostic->report->validationFailure, $sql);
+            }
+
+            return self::FAILURE;
+        }
+
         if ($this->option('json')) {
             $this->line($diagnostic->toJson(JSON_PRETTY_PRINT));
         } else {
@@ -65,13 +75,13 @@ final class DiagnoseQueryCommand extends Command
 
     private function handleShallow(Engine $engine, string $sql, ReportRenderer $renderer): int
     {
-        try {
-            $report = $engine->analyzeSql($sql);
-        } catch (EngineAbortException $e) {
+        $report = $engine->analyzeSql($sql);
+
+        if ($report->isValidationFailure() && $report->validationFailure !== null) {
             if ($this->option('json')) {
-                $this->line($e->failureReport->toJson(JSON_PRETTY_PRINT));
+                $this->line($report->validationFailure->toJson(JSON_PRETTY_PRINT));
             } else {
-                $renderer->renderValidationFailure($this, $e->failureReport, $sql);
+                $renderer->renderValidationFailure($this, $report->validationFailure, $sql);
             }
 
             return self::FAILURE;

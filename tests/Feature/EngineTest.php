@@ -9,7 +9,6 @@ use QuerySentinel\Core\Engine;
 use QuerySentinel\Core\ProfileReport;
 use QuerySentinel\Core\QueryAnalyzer;
 use QuerySentinel\Diagnostics\QueryDiagnostics;
-use QuerySentinel\Exceptions\EngineAbortException;
 use QuerySentinel\Exceptions\UnsafeQueryException;
 use QuerySentinel\Support\ExecutionGuard;
 use QuerySentinel\Support\Report;
@@ -154,8 +153,11 @@ final class EngineTest extends TestCase
         $this->app['config']->set('query-diagnostics.validation.strict', true);
         $engine = $this->app->make(Engine::class);
 
-        $this->expectException(EngineAbortException::class);
-        $engine->analyzeSql('SELECT * FROM karimalihussein WHERE id = 1');
+        $report = $engine->analyzeSql('SELECT * FROM karimalihussein WHERE id = 1');
+
+        $this->assertTrue($report->isValidationFailure());
+        $this->assertNotNull($report->validationFailure);
+        $this->assertStringContainsString('Table', $report->validationFailure->status);
     }
 
     public function test_analyze_backward_compat_alias(): void
@@ -195,9 +197,8 @@ final class EngineTest extends TestCase
     public function test_analyze_builder_with_query_builder(): void
     {
         $engine = $this->app->make(Engine::class);
-        $builder = $this->app['db']->table('sqlite_master')
-            ->select('name')
-            ->where('type', '=', 'table');
+        $table = $this->getTestTableName();
+        $builder = $this->app['db']->table($table)->select('*')->limit(1);
 
         $report = $engine->analyzeBuilder($builder);
 

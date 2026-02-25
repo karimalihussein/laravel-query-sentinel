@@ -6,13 +6,14 @@ namespace QuerySentinel\Validation;
 
 use Illuminate\Support\Facades\DB;
 use QuerySentinel\Contracts\SchemaIntrospector;
-use QuerySentinel\Exceptions\EngineAbortException;
 use QuerySentinel\Support\SqlParser;
 use QuerySentinel\Support\TypoIntelligence;
 use QuerySentinel\Support\ValidationFailureReport;
+use QuerySentinel\Support\ValidationResult;
 
 /**
- * Validates table and column existence via INFORMATION_SCHEMA.
+ * Validates table and column existence via driver-specific introspector.
+ * Returns ValidationResult; no exceptions.
  */
 final class SchemaValidator
 {
@@ -22,11 +23,9 @@ final class SchemaValidator
     ) {}
 
     /**
-     * Validate all tables exist. Throws on first missing table.
-     *
-     * @throws EngineAbortException
+     * Validate all tables exist. Returns ValidationResult (invalid on first missing table).
      */
-    public function validateTables(string $sql): void
+    public function validateTables(string $sql): ValidationResult
     {
         $tables = SqlParser::extractTables($sql);
         $conn = DB::connection($this->connection ?? config('query-diagnostics.connection'));
@@ -48,8 +47,7 @@ final class SchemaValidator
                     $recs[] = "Did you mean: {$suggestion}?";
                 }
 
-                throw new EngineAbortException(
-                    'Table not found',
+                return ValidationResult::invalid([
                     new ValidationFailureReport(
                         status: 'ERROR — Table Not Found',
                         failureStage: 'Table Validation',
@@ -58,25 +56,26 @@ final class SchemaValidator
                         suggestion: $suggestion,
                         missingTable: $table,
                         database: $dbName,
-                    )
-                );
+                    ),
+                ]);
             }
         }
+
+        return ValidationResult::valid();
     }
 
     /**
-     * Validate all column references exist. Throws on first missing column.
+     * Validate all column references exist. Returns ValidationResult (invalid on first missing column).
      *
      * @param  array<string, string>  $aliasToTable
-     *
-     * @throws EngineAbortException
      */
-    public function validateColumns(string $sql, array $aliasToTable): void
+    public function validateColumns(string $sql, array $aliasToTable): ValidationResult
     {
         $refs = SqlParser::extractColumnReferences($sql);
         $tables = SqlParser::extractTables($sql);
         $conn = DB::connection($this->connection ?? config('query-diagnostics.connection'));
         $dbName = $conn->getDatabaseName();
+
         foreach ($refs as ['table' => $tableOrAlias, 'column' => $column]) {
             $table = $tableOrAlias !== null
                 ? ($aliasToTable[$tableOrAlias] ?? $tableOrAlias)
@@ -95,8 +94,7 @@ final class SchemaValidator
 
                 $recs = $suggestion !== null ? ["Did you mean: {$suggestion}?"] : ['Check column name spelling'];
 
-                throw new EngineAbortException(
-                    'Column not found',
+                return ValidationResult::invalid([
                     new ValidationFailureReport(
                         status: 'ERROR — Column Not Found',
                         failureStage: 'Column Validation',
@@ -106,11 +104,11 @@ final class SchemaValidator
                         missingTable: $table,
                         missingColumn: $column,
                         database: $dbName,
-                    )
-                );
+                    ),
+                ]);
             }
         }
-    }
 
-    // Implementation is delegated to the injected SchemaIntrospector.
+        return ValidationResult::valid();
+    }
 }

@@ -140,6 +140,11 @@ final class Engine
     public function diagnose(string $sql, ?string $connectionName = null): DiagnosticReport
     {
         $report = $this->analyzeSql($sql);
+
+        if ($report->isValidationFailure()) {
+            return new DiagnosticReport($report, []);
+        }
+
         $result = $report->result;
         $findings = [];
 

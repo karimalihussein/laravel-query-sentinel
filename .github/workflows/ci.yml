@@ -201,5 +201,8 @@ jobs:
           "
           echo "::endgroup::"
 
+      # Schema (users, posts, orders) is bootstrapped in TestCase::setUp() via Schema::create()
+      # so no separate migrate step is required. Optional: set QUERY_SENTINEL_USE_TEST_MIGRATIONS=1
+      # to use test-only migrations from tests/database/migrations instead.
       - name: Execute tests
         run: vendor/bin/phpunit --coverage-clover=coverage/clover.xml
