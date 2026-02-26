@@ -1,0 +1,83 @@
+# PR Comment Bot - Runs Query Sentinel and posts analysis as PR comment
+name: Query Sentinel PR
+
+on:
+  pull_request:
+    paths:
+      - '**.php'
+      - '.github/workflows/query-sentinel-pr.yml'
+      - '.github/actions/query-sentinel-action/**'
+
+concurrency:
+  group: query-sentinel-pr-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  query-sentinel:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    timeout-minutes: 10
+
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: testing
+          MYSQL_USER: testing
+          MYSQL_PASSWORD: testing
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -u root -proot"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=10
+
+    env:
+      DB_HOST: 127.0.0.1
+      DB_CONNECTION: mysql
+      DB_PORT: 3306
+      DB_DATABASE: testing
+      DB_USERNAME: root
+      DB_PASSWORD: root
+      QUERY_SENTINEL_DRIVER: mysql
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: dom, curl, mbstring, zip, pdo, pdo_mysql
+
+      - name: Create temp Laravel app
+        run: |
+          composer create-project laravel/laravel temp-app --prefer-dist --no-interaction
+          cd temp-app
+          composer config repositories.pkg '{"type":"path","url":"../","options":{"symlink":false}}'
+          composer require karimalihussein/laravel-query-sentinel:@dev --no-interaction
+
+      - name: Configure database
+        run: |
+          cd temp-app
+          cp .env.example .env
+          php artisan key:generate
+          sed -i 's/DB_CONNECTION=sqlite/DB_CONNECTION=mysql/' .env
+          sed -i 's/# DB_HOST=127.0.0.1/DB_HOST=127.0.0.1/' .env
+          sed -i 's/# DB_PORT=3306/DB_PORT=3306/' .env
+          sed -i 's/# DB_DATABASE=laravel/DB_DATABASE=testing/' .env
+          sed -i 's/# DB_USERNAME=root/DB_USERNAME=root/' .env
+          sed -i 's/# DB_PASSWORD=/DB_PASSWORD=root/' .env
+
+      - name: Query Sentinel Action
+        uses: ./.github/actions/query-sentinel-action
+        with:
+          sql: "SELECT 1"
+          post-comment: "true"
+          shallow: "true"
+          working-directory: temp-app

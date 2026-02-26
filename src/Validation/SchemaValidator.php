@@ -67,19 +67,37 @@ final class SchemaValidator
     /**
      * Validate all column references exist. Returns ValidationResult (invalid on first missing column).
      *
-     * @param  array<string, string>  $aliasToTable
+     * Skips validation for: (1) columns from derived tables (alias => null),
+     * (2) virtual/derived column aliases (e.g. ROW_NUMBER() AS rn, expression AS alias).
+     *
+     * @param  array<string, string|null>  $aliasToTable  alias => base table name, or null for derived tables
      */
     public function validateColumns(string $sql, array $aliasToTable): ValidationResult
     {
         $refs = SqlParser::extractColumnReferences($sql);
         $tables = SqlParser::extractTables($sql);
+        $virtualColumns = SqlParser::extractVirtualColumnAliases($sql);
         $conn = DB::connection($this->connection ?? config('query-diagnostics.connection'));
         $dbName = $conn->getDatabaseName();
 
         foreach ($refs as ['table' => $tableOrAlias, 'column' => $column]) {
-            $table = $tableOrAlias !== null
-                ? ($aliasToTable[$tableOrAlias] ?? $tableOrAlias)
-                : ($tables[0] ?? null);
+            // Resolve table: qualified ref uses alias map (null = derived table); unqualified uses first physical table
+            $table = null;
+            if ($tableOrAlias !== null) {
+                $table = array_key_exists($tableOrAlias, $aliasToTable)
+                    ? $aliasToTable[$tableOrAlias]
+                    : $tableOrAlias;
+                // Derived table alias (value null): skip physical schema check
+                if ($table === null) {
+                    continue;
+                }
+            } else {
+                // Unqualified column: if it's a virtual/derived alias (e.g. rn from ROW_NUMBER() AS rn), skip
+                if (in_array($column, $virtualColumns, true)) {
+                    continue;
+                }
+                $table = $tables[0] ?? null;
+            }
 
             if ($table === null) {
                 continue;

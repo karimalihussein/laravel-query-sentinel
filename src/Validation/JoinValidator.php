@@ -11,6 +11,7 @@ use QuerySentinel\Support\ValidationResult;
 /**
  * Validates JOIN conditions: aliases exist, ON columns reference valid tables.
  * Assumes SchemaValidator has already run (tables and columns exist).
+ * Derived table aliases (alias => null) are treated as valid; column existence was skipped by SchemaValidator.
  * Returns ValidationResult; no exceptions.
  */
 final class JoinValidator
@@ -18,7 +19,7 @@ final class JoinValidator
     /**
      * Validate join structure. Returns ValidationResult.
      *
-     * @param  array<string, string>  $aliasToTable
+     * @param  array<string, string|null>  $aliasToTable  alias => base table or null for derived tables
      */
     public function validate(string $sql, array $aliasToTable): ValidationResult
     {
@@ -31,9 +32,11 @@ final class JoinValidator
                 continue;
             }
             [$tableOrAlias, $column] = $parts;
-            $resolvedTable = $aliasToTable[$tableOrAlias] ?? $tableOrAlias;
+            $resolvedTable = array_key_exists($tableOrAlias, $aliasToTable) ? $aliasToTable[$tableOrAlias] : $tableOrAlias;
 
-            if (! in_array($resolvedTable, $tables, true) && ! in_array($tableOrAlias, $tables, true)) {
+            // Valid if: resolved table is a physical table, or ref is physical table name, or alias is known (including derived)
+            $knownAlias = array_key_exists($tableOrAlias, $aliasToTable);
+            if (! in_array($resolvedTable, $tables, true) && ! in_array($tableOrAlias, $tables, true) && ! $knownAlias) {
                 return ValidationResult::invalid([
                     new ValidationFailureReport(
                         status: 'ERROR — Invalid Join Condition',

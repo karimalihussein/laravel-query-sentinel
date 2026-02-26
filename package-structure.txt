@@ -1,8 +1,10 @@
 laravel-query-sentinel/
 |
 |-- .github/
+|   |-- dependabot.yml
 |   \-- workflows/
-|       \-- ci.yml
+|       |-- ci.yml
+|       \-- security.yml
 |
 |-- config/
 |   \-- query-diagnostics.php
@@ -17,14 +19,22 @@ laravel-query-sentinel/
 |   |   \-- SqlAdapter.php
 |   |
 |   |-- Analyzers/
+|   |   |-- AntiPatternAnalyzer.php
+|   |   |-- CardinalityDriftAnalyzer.php
+|   |   |-- ConcurrencyRiskAnalyzer.php
 |   |   |-- EnvironmentAnalyzer.php
 |   |   |-- ExecutionProfileAnalyzer.php
+|   |   |-- HypotheticalIndexAnalyzer.php
 |   |   |-- IndexCardinalityAnalyzer.php
+|   |   |-- IndexSynthesisAnalyzer.php
 |   |   |-- JoinAnalyzer.php
+|   |   |-- MemoryPressureAnalyzer.php
 |   |   |-- MetricsExtractor.php
 |   |   |-- PlanStabilityAnalyzer.php
+|   |   |-- RegressionBaselineAnalyzer.php
 |   |   |-- RegressionSafetyAnalyzer.php
-|   |   \-- ScalabilityEstimator.php
+|   |   |-- ScalabilityEstimator.php
+|   |   \-- WorkloadAnalyzer.php
 |   |
 |   |-- Attributes/
 |   |   \-- QueryDiagnose.php
@@ -36,7 +46,14 @@ laravel-query-sentinel/
 |   |-- Contracts/
 |   |   |-- AdapterInterface.php
 |   |   |-- AnalyzerInterface.php
-|   |   \-- ProfilerInterface.php
+|   |   |-- DriverInterface.php
+|   |   |-- ExplainExecutorInterface.php
+|   |   |-- PlanParserInterface.php
+|   |   |-- ProfilerInterface.php
+|   |   |-- RuleInterface.php
+|   |   |-- RuleRegistryInterface.php
+|   |   |-- SchemaIntrospector.php
+|   |   \-- ScoringEngineInterface.php
 |   |
 |   |-- Core/
 |   |   |-- Engine.php
@@ -48,13 +65,15 @@ laravel-query-sentinel/
 |   |
 |   |-- Drivers/
 |   |   |-- MySqlDriver.php
-|   |   \-- PostgresDriver.php
+|   |   |-- PostgresDriver.php
+|   |   \-- SqliteDriver.php
 |   |
 |   |-- Enums/
 |   |   |-- ComplexityClass.php
 |   |   \-- Severity.php
 |   |
 |   |-- Exceptions/
+|   |   |-- EngineAbortException.php
 |   |   |-- PerformanceViolationException.php
 |   |   \-- UnsafeQueryException.php
 |   |
@@ -75,34 +94,64 @@ laravel-query-sentinel/
 |   |   \-- ExplainPlanParser.php
 |   |
 |   |-- Rules/
+|   |   |-- BaseRule.php
 |   |   |-- DeepNestedLoopRule.php
 |   |   |-- FullTableScanRule.php
 |   |   |-- IndexMergeRule.php
 |   |   |-- LimitIneffectiveRule.php
 |   |   |-- NoIndexRule.php
 |   |   |-- QuadraticComplexityRule.php
+|   |   |-- RuleRegistry.php
 |   |   |-- StaleStatsRule.php
 |   |   |-- TempTableRule.php
-|   |   |-- WeedoutRule.php
+|   |   \-- WeedoutRule.php
 |   |
 |   |-- Scoring/
+|   |   |-- ConfidenceScorer.php
 |   |   \-- DefaultScoringEngine.php
 |   |
 |   |-- Support/
+|   |   |-- BaselineStore.php
 |   |   |-- DiagnosticReport.php
+|   |   |-- DriverExplainExecutor.php
+|   |   |-- EngineConsistencyValidator.php
 |   |   |-- EnvironmentContext.php
 |   |   |-- ExecutionGuard.php
 |   |   |-- ExecutionProfile.php
+|   |   |-- ExplainGuard.php
+|   |   |-- ExplainResult.php
 |   |   |-- Finding.php
 |   |   |-- PlanNode.php
 |   |   |-- QueryCapture.php
 |   |   |-- Report.php
+|   |   |-- Result.php
 |   |   |-- SamplingGuard.php
+|   |   |-- SchemaIntrospectors/
+|   |   |   |-- MySqlSchemaIntrospector.php
+|   |   |   |-- PermissiveSchemaIntrospector.php
+|   |   |   |-- PostgresSchemaIntrospector.php
+|   |   |   \-- SqliteSchemaIntrospector.php
 |   |   |-- SqlParser.php
 |   |   |-- SqlSanitizer.php
-|   |   \-- ThresholdGuard.php
+|   |   |-- ThresholdGuard.php
+|   |   |-- TypoIntelligence.php
+|   |   |-- ValidationFailureReport.php
+|   |   \-- ValidationResult.php
+|   |
+|   \-- Validation/
+|       |-- JoinValidator.php
+|       |-- SchemaValidator.php
+|       |-- SyntaxValidator.php
+|       \-- ValidationPipeline.php
 |
 |-- tests/
+|   |-- TestCase.php
+|   |
+|   |-- database/
+|   |   \-- migrations/
+|   |       |-- 2024_01_01_000001_create_test_users_table.php
+|   |       \-- 2024_01_01_000002_create_test_posts_and_orders_tables.php
+|   |
 |   |-- Feature/
 |   |   |-- ContainerProxyTest.php
 |   |   |-- DiagnosticEngineTest.php
@@ -115,27 +164,50 @@ laravel-query-sentinel/
 |   |   \-- ServiceProviderTest.php
 |   |
 |   \-- Unit/
+|       |-- AntiPatternAnalyzerTest.php
+|       |-- ArchitecturalFixesTest.php
+|       |-- BaselineStoreTest.php
+|       |-- CardinalityDriftAnalyzerTest.php
+|       |-- ComplexityClassTest.php
+|       |-- ConcurrencyRiskAnalyzerTest.php
+|       |-- ConfidenceGradeCapTest.php
+|       |-- ConfidenceScorerTest.php
+|       |-- EngineConsistencyTest.php
 |       |-- ExecutionGuardTest.php
 |       |-- ExplainPlanParserTest.php
+|       |-- HypotheticalIndexAnalyzerTest.php
+|       |-- IndexSynthesisAnalyzerTest.php
+|       |-- IntentionalScanTest.php
+|       |-- JoinFanoutAnalyzerTest.php
+|       |-- MemoryPressureAnalyzerTest.php
+|       |-- MetricsExtractorTest.php
+|       |-- MultiDriverNormalizationTest.php
 |       |-- PerformanceViolationExceptionTest.php
+|       |-- PlanStabilityVolatilityTest.php
+|       |-- ProductionEnhancementsTest.php
 |       |-- ProfileReportTest.php
+|       |-- QueryAnalyzerConsistencyTest.php
 |       |-- QueryCaptureTest.php
 |       |-- QueryDiagnoseAttributeTest.php
+|       |-- RegressionBaselineAnalyzerTest.php
 |       |-- ReportTest.php
+|       |-- ResultTest.php
 |       |-- RuleRegistryTest.php
 |       |-- RulesTest.php
 |       |-- SamplingGuardTest.php
 |       |-- ScalabilityEstimatorTest.php
 |       |-- ScoringEngineTest.php
 |       |-- SqlSanitizerTest.php
+|       |-- StructuralFixesTest.php
 |       \-- ThresholdGuardTest.php
 |
 |-- .gitignore
+|-- BUGS_LOG.md
 |-- composer.json
-|-- composer.lock
 |-- LICENSE.md
 |-- package-structure.txt
 |-- phpstan.neon.dist
 |-- phpunit.xml.dist
 |-- pint.json
-\-- README.md
+|-- README.md
+\-- SECURITY.md

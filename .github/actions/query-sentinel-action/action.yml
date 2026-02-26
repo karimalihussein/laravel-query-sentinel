@@ -1,0 +1,70 @@
+# Query Sentinel - GitHub Action
+# Run query performance analysis and optionally post results as PR comment.
+# Usage (in consuming app's workflow):
+#   - uses: karimalihussein/laravel-query-sentinel/.github/actions/query-sentinel-action@main
+#     with:
+#       sql: "SELECT 1"
+#       post-comment: true
+name: Query Sentinel
+description: Run Laravel Query Sentinel diagnostics and optionally post PR comment
+author: Karim Ali Hussein
+
+inputs:
+  sql:
+    description: SQL query to analyze
+    required: true
+    default: "SELECT 1"
+  post-comment:
+    description: Post analysis results as PR comment
+    required: false
+    default: "true"
+  shallow:
+    description: Use shallow analysis (faster)
+    required: false
+    default: "true"
+  connection:
+    description: Database connection name
+    required: false
+    default: ''
+  working-directory:
+    description: Directory containing artisan (default current directory)
+    required: false
+    default: ''
+
+runs:
+  using: composite
+  steps:
+    - name: Run Query Sentinel
+      id: diagnose
+      shell: bash
+      env:
+        INPUT_SQL: ${{ inputs.sql }}
+        WORK_DIR: ${{ inputs.working-directory }}
+      run: |
+        set +e
+        [ -n "$WORK_DIR" ] && cd "$WORK_DIR"
+        FLAGS="--json"
+        [ "${{ inputs.shallow }}" = "true" ] && FLAGS="$FLAGS --shallow"
+        [ -n "${{ inputs.connection }}" ] && FLAGS="$FLAGS --connection=${{ inputs.connection }}"
+        OUTPUT=$(php artisan query:diagnose "$INPUT_SQL" $FLAGS 2>&1)
+        EXIT=$?
+        echo "exit_code=$EXIT" >> $GITHUB_OUTPUT
+        echo "output<<EOF" >> $GITHUB_OUTPUT
+        echo "$OUTPUT" >> $GITHUB_OUTPUT
+        echo "EOF" >> $GITHUB_OUTPUT
+
+    - name: Post PR comment
+      if: (inputs.post-comment == 'true' && github.event_name == 'pull_request') && (success() || failure())
+      uses: peter-evans/create-or-update-comment@v4
+      with:
+        comment-id: query-sentinel
+        body: |
+          ## Query Sentinel Analysis
+          **SQL:** `${{ inputs.sql }}`
+          <details>
+          <summary>Diagnostics output</summary>
+          ```json
+          ${{ steps.diagnose.outputs.output }}
+          ```
+          </details>
+        reactions: eyes
