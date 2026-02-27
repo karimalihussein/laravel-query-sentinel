@@ -2,8 +2,12 @@ laravel-query-sentinel/
 |
 |-- .github/
 |   |-- dependabot.yml
+|   |-- actions/
+|   |   \-- query-sentinel-action/
+|   |       \-- action.yml
 |   \-- workflows/
 |       |-- ci.yml
+|       |-- query-sentinel-pr.yml
 |       \-- security.yml
 |
 |-- config/
@@ -37,11 +41,13 @@ laravel-query-sentinel/
 |   |   \-- WorkloadAnalyzer.php
 |   |
 |   |-- Attributes/
+|   |   |-- DiagnoseQuery.php
 |   |   \-- QueryDiagnose.php
 |   |
 |   |-- Console/
 |   |   |-- DiagnoseQueryCommand.php
-|   |   \-- ReportRenderer.php
+|   |   |-- ReportRenderer.php
+|   |   \-- ScanCommand.php
 |   |
 |   |-- Contracts/
 |   |   |-- AdapterInterface.php
@@ -106,6 +112,10 @@ laravel-query-sentinel/
 |   |   |-- TempTableRule.php
 |   |   \-- WeedoutRule.php
 |   |
+|   |-- Scanner/
+|   |   |-- AttributeScanner.php
+|   |   \-- ScannedMethod.php
+|   |
 |   |-- Scoring/
 |   |   |-- ConfidenceScorer.php
 |   |   \-- DefaultScoringEngine.php
@@ -161,6 +171,7 @@ laravel-query-sentinel/
 |   |   |-- QueryCaptorTest.php
 |   |   |-- QueryDiagnosticsTest.php
 |   |   |-- ReportLoggerTest.php
+|   |   |-- ScanCommandTest.php
 |   |   \-- ServiceProviderTest.php
 |   |
 |   \-- Unit/
@@ -172,6 +183,8 @@ laravel-query-sentinel/
 |       |-- ConcurrencyRiskAnalyzerTest.php
 |       |-- ConfidenceGradeCapTest.php
 |       |-- ConfidenceScorerTest.php
+|       |-- DerivedTableValidationTest.php
+|       |-- DiagnoseQueryAttributeTest.php
 |       |-- EngineConsistencyTest.php
 |       |-- ExecutionGuardTest.php
 |       |-- ExplainPlanParserTest.php
@@ -196,7 +209,14 @@ laravel-query-sentinel/
 |       |-- RulesTest.php
 |       |-- SamplingGuardTest.php
 |       |-- ScalabilityEstimatorTest.php
+|       |-- Scanner/
+|       |   |-- AttributeScannerTest.php
+|       |   |-- ScannedMethodTest.php
+|       |   \-- Fixtures/
+|       |       |-- AbstractService.php
+|       |       \-- SampleQueryService.php
 |       |-- ScoringEngineTest.php
+|       |-- SqlParserDerivedTablesTest.php
 |       |-- SqlSanitizerTest.php
 |       |-- StructuralFixesTest.php
 |       \-- ThresholdGuardTest.php
