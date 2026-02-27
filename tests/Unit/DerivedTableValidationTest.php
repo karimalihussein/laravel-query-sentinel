@@ -6,10 +6,10 @@ namespace QuerySentinel\Tests\Unit;
 
 use Illuminate\Database\Connection;
 use QuerySentinel\Contracts\SchemaIntrospector;
+use QuerySentinel\Support\SchemaIntrospectors\PermissiveSchemaIntrospector;
 use QuerySentinel\Tests\TestCase;
 use QuerySentinel\Validation\SchemaValidator;
 use QuerySentinel\Validation\ValidationPipeline;
-use QuerySentinel\Support\SchemaIntrospectors\PermissiveSchemaIntrospector;
 
 /**
  * Validation passes for SQL with derived tables and window-function aliases (e.g. ROW_NUMBER() AS rn).
@@ -66,7 +66,8 @@ SQL;
 
     public function test_validation_passes_when_rn_is_skipped_as_virtual_even_if_not_in_physical_schema(): void
     {
-        $introspector = new class implements SchemaIntrospector {
+        $introspector = new class implements SchemaIntrospector
+        {
             public function tableExists(Connection $conn, string $table): ?object
             {
                 return in_array($table, ['products', 'product_images'], true) ? (object) ['TABLE_NAME' => $table] : null;
@@ -82,6 +83,7 @@ SQL;
                 if ($table === 'products' && $column === 'rn') {
                     return null;
                 }
+
                 return (object) ['COLUMN_NAME' => $column];
             }
 

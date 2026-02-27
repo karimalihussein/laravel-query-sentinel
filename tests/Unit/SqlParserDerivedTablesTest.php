@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace QuerySentinel\Tests\Unit;
 
-use QuerySentinel\Support\SqlParser;
 use PHPUnit\Framework\TestCase;
+use QuerySentinel\Support\SqlParser;
 
 /**
  * Tests for derived tables, virtual/window column aliases, and alias resolution.
@@ -73,7 +73,7 @@ SQL;
 
     public function test_extract_virtual_column_aliases_multiple_as_in_select(): void
     {
-        $sql = "SELECT id, name AS n, COUNT(*) AS cnt FROM t GROUP BY id";
+        $sql = 'SELECT id, name AS n, COUNT(*) AS cnt FROM t GROUP BY id';
         $columns = SqlParser::extractVirtualColumnAliases($sql);
 
         $this->assertContains('n', $columns);
@@ -137,10 +137,10 @@ SQL;
      */
     public function test_join_on_with_subquery_does_not_capture_sql_keywords_as_columns(): void
     {
-        $sql = "SELECT p.*, i.url FROM (SELECT * FROM products LIMIT 10) p "
-            . "LEFT JOIN product_images i ON i.product_id = p.id "
-            . "AND i.created_at >= (SELECT created_at FROM product_images pi WHERE pi.product_id = p.id ORDER BY pi.created_at DESC LIMIT 1 OFFSET 2) "
-            . "ORDER BY p.created_at DESC";
+        $sql = 'SELECT p.*, i.url FROM (SELECT * FROM products LIMIT 10) p '
+            .'LEFT JOIN product_images i ON i.product_id = p.id '
+            .'AND i.created_at >= (SELECT created_at FROM product_images pi WHERE pi.product_id = p.id ORDER BY pi.created_at DESC LIMIT 1 OFFSET 2) '
+            .'ORDER BY p.created_at DESC';
 
         $refs = SqlParser::extractColumnReferences($sql);
 

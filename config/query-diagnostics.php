@@ -214,6 +214,21 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Query Scan (Interactive Builder Diagnosis)
+    |--------------------------------------------------------------------------
+    |
+    | Settings for the query:scan command that discovers #[DiagnoseQuery]
+    | annotated methods and allows interactive builder diagnosis.
+    |
+    */
+
+    'scan' => [
+        // Directories to scan for #[DiagnoseQuery] attributes (relative to base_path())
+        'paths' => ['app', 'Modules'],
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Cardinality Drift (Phase 1)
     |--------------------------------------------------------------------------
     */

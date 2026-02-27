@@ -16,6 +16,7 @@ use QuerySentinel\Analyzers\RegressionBaselineAnalyzer;
 use QuerySentinel\Analyzers\ScalabilityEstimator;
 use QuerySentinel\Analyzers\WorkloadAnalyzer;
 use QuerySentinel\Console\DiagnoseQueryCommand;
+use QuerySentinel\Console\ScanCommand;
 use QuerySentinel\Contracts\AnalyzerInterface;
 use QuerySentinel\Contracts\DriverInterface;
 use QuerySentinel\Contracts\ExplainExecutorInterface;
@@ -32,6 +33,7 @@ use QuerySentinel\Interception\QueryDiagnoseMiddleware;
 use QuerySentinel\Logging\ReportLogger;
 use QuerySentinel\Parsers\ExplainPlanParser;
 use QuerySentinel\Rules\RuleRegistry;
+use QuerySentinel\Scanner\AttributeScanner;
 use QuerySentinel\Scoring\ConfidenceScorer;
 use QuerySentinel\Scoring\DefaultScoringEngine;
 use QuerySentinel\Support\BaselineStore;
@@ -57,6 +59,7 @@ final class QueryDiagnosticsServiceProvider extends ServiceProvider
         $this->registerEngine();
         $this->registerLegacyDiagnostics();
         $this->registerDiagnostics();
+        $this->registerScanner();
     }
 
     public function boot(): void
@@ -68,6 +71,7 @@ final class QueryDiagnosticsServiceProvider extends ServiceProvider
 
             $this->commands([
                 DiagnoseQueryCommand::class,
+                ScanCommand::class,
             ]);
         }
 
@@ -351,6 +355,24 @@ final class QueryDiagnosticsServiceProvider extends ServiceProvider
                 engine: $app->make(Engine::class),
                 logger: $app->make(ReportLogger::class),
             );
+        });
+    }
+
+    /**
+     * Register the attribute scanner for #[DiagnoseQuery] discovery.
+     */
+    private function registerScanner(): void
+    {
+        $this->app->singleton(AttributeScanner::class, function ($app) {
+            /** @var array<int, string> $configPaths */
+            $configPaths = $app['config']->get('query-diagnostics.scan.paths', ['app', 'Modules']);
+
+            $absolutePaths = array_map(
+                fn (string $path) => base_path($path),
+                $configPaths,
+            );
+
+            return new AttributeScanner($absolutePaths);
         });
     }
 
